@@ -1,7 +1,8 @@
 # rtnetlink
 
 A native Go rtnetlink library based on
-[netlink](https://github.com/mdlayher/netlink).
+[this Go netlink library](https://github.com/mdlayher/netlink) by [Matt
+Layher](https://mdlayher.com/).
 
 ## Why?
 
