@@ -1,4 +1,4 @@
-package rtnetlink
+package rtnl
 
 import (
 	"encoding/binary"

@@ -1,4 +1,4 @@
-package rtnetlink
+package rtnl
 
 func stringSat(value, spec string) bool {
 	if spec == "" {

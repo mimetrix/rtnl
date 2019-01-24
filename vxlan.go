@@ -1,4 +1,4 @@
-package rtnetlink
+package rtnl
 
 import (
 	"github.com/mdlayher/netlink"
