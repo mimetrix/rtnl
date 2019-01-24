@@ -133,4 +133,38 @@ func Test_VethNamespace(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// ensure iproute2 sees the link in correc namespace
+	out, err = exec.Command(
+		"ip", "netns", "exec", "pizza", "ip", "-j", "link", "show", "dev", "vethB",
+	).CombinedOutput()
+	if err != nil {
+		t.Fatal(string(out))
+	}
+
+	var ilinks []IProute2Link
+	err = json.Unmarshal(out, &ilinks)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(ilinks) == 0 {
+		t.Fatal("created veth not found")
+	}
+
+	if ilinks[0].Ifname != "vethB" {
+		t.Fatal("veth does not have correct name")
+	}
+
+	// note that we cannot test for the peer here because it is in a different
+	// namespace
+
+	// cleanup
+
+	va.Del()
+
+	out, err = exec.Command("ip", "netns", "del", "pizza").CombinedOutput()
+	if err != nil {
+		t.Fatal(string(out))
+	}
+
 }
