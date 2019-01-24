@@ -1,4 +1,4 @@
-# rtnetlink
+# rtnl
 
 A native Go rtnetlink library based on
 [this Go netlink library](https://github.com/mdlayher/netlink) by [Matt
@@ -20,3 +20,49 @@ who wants to use it.
 
 This library will stay exclusive to netlink and will not wander into iproute2 and
 the like.
+
+## Design
+
+rtnl is structured around 4 basic rtnetlink objects.
+
+- links
+- routes
+- neighbors
+- addresses
+
+There is a high level object for each of these object kinds with management
+functions exposed.
+
+Support for the remaining objects may come in time
+
+- rules
+- qdiscs
+- tclass
+- tfilter
+
+## Examples
+
+### Virtual ethernet device management
+
+```go
+
+// create a veth pair
+ve := &Link{
+  Info: &LinkInfo{
+    Name: "vethA",
+    Veth: &Veth{
+      Peer: "vethB",
+    },
+  },
+}
+err := ve.Add()
+
+// put one side of the pair in the pizza namespace
+vb := &Link{
+  Info: &LinkInfo{
+    Name: "vethB",
+    Ns:   netns.GetFd("pizza"),
+  },
+}
+err = vb.Set()
+```
