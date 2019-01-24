@@ -59,6 +59,8 @@ type LinkInfo struct {
 
 	// The following are optional link properties and are null if not present
 
+	// network namespace file descriptor
+	Ns    uint32
 	Addrs []Address
 	Veth  *Veth
 	Vxlan *Vxlan
@@ -94,6 +96,9 @@ func (l Link) Marshal() ([]byte, error) {
 
 	if l.Info != nil && l.Info.Name != "" {
 		ae.String(unix.IFLA_IFNAME, l.Info.Name)
+	}
+	if l.Info != nil && l.Info.Ns != 0 {
+		ae.Uint32(unix.IFLA_NET_NS_FD, l.Info.Ns)
 	}
 	attrs, err := ae.Encode()
 	if err != nil {
@@ -172,6 +177,9 @@ func (l *Link) Unmarshal(bs []byte) error {
 
 		case unix.IFLA_LINK:
 			link = ad.Uint32()
+
+		case unix.IFLA_NET_NS_FD:
+			l.Info.Ns = ad.Uint32()
 
 		}
 	}
@@ -310,6 +318,13 @@ func (l *Link) Present() error {
 
 }
 
+// Set sets link attributes
+func (l *Link) Set() error {
+
+	return l.Modify(unix.RTM_SETLINK)
+
+}
+
 // Del deletes the link from the kernel.
 func (l *Link) Del() error {
 
@@ -329,7 +344,7 @@ func (l *Link) Absent() error {
 }
 
 // Modify changes the link according to the supplied operation. Supported
-// operations include RTM_NEWLINK and RTM_DELLINK.
+// operations include RTM_NEWLINK, RTM_SETLINK and RTM_DELLINK.
 func (l *Link) Modify(op uint16) error {
 
 	data, err := l.Marshal()

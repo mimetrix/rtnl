@@ -94,3 +94,26 @@ func Test_AddVeth(t *testing.T) {
 	}
 
 }
+
+func Test_VethNamespace(t *testing.T) {
+
+	va := &Link{
+		Info: &LinkInfo{
+			Name: "vethA",
+			Veth: &Veth{
+				Peer: "vethB",
+			},
+		},
+	}
+	err := ve.Add()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	vb := &Link{
+		Info: &LinkInfo{
+			Name: "vethB",
+		},
+	}
+
+}
