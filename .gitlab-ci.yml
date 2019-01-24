@@ -1,0 +1,12 @@
+
+stages:
+  - test
+
+test:
+  stage: test
+  script:
+    - unset GOPATH
+    - sudo -E /usr/local/go/bin/go test
+  tags:
+    - merge
+    - shell

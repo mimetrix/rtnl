@@ -3,20 +3,28 @@ package rtnetlink
 import (
 	"encoding/binary"
 	"fmt"
-	"net"
 
 	"github.com/mdlayher/netlink"
+	"github.com/mdlayher/netlink/nlenc"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 )
 
-// Link info
-type Link struct {
-	Name    string
-	Index   uint32
-	Vni     uint32
-	IPAddrs []net.IP
-}
+// Constants ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+const (
+	ifInfomsgLen = 16
+)
+
+// LinkType aliases link type enumerations in a type safe way
+type LinkType uint32
+
+const (
+	UnspecLinkType LinkType = iota
+	PhysicalType
+	VxlanType
+	VethType
+)
 
 // interface link address attribute types
 const (
@@ -31,135 +39,110 @@ const (
 	IFLA_VXLAN_ID
 )
 
-// TODO(ry) wrap this up in a package-local structure and provide same
-// Marshal/Unmarshal interface as the rest of the netlink messages
-//
-// marshal an interface address message to bytes
-func marshalIfaddrMsg(m unix.IfAddrmsg) []byte {
+// veth attribute types
+const (
+	VETH_INFO_UNSPEC uint16 = iota
+	VETH_INFO_PEER
+)
+
+// Data Structures ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+// Link consolidates link information from rtnetlink
+type Link struct {
+	Msg  unix.IfInfomsg
+	Info *LinkInfo
+}
+
+// LinkInfo holds link attribute data
+type LinkInfo struct {
+	Name string
+
+	// The following are optional link properties and are null if not present
+
+	Addrs []Address
+	Veth  *Veth
+	Vxlan *Vxlan
+}
+
+// Methods ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+// Marshal turns a link into a binary rtnetlink message and a set of attributes.
+func (l Link) Marshal() ([]byte, error) {
+
+	typ := make([]byte, 2)
+	binary.LittleEndian.PutUint16(typ, l.Msg.Type)
 
 	index := make([]byte, 4)
-	binary.LittleEndian.PutUint32(index, m.Index)
+	nlenc.PutInt32(index, l.Msg.Index)
 
-	return []byte{
-		m.Family,
-		m.Prefixlen,
-		m.Flags,
-		m.Scope,
+	flags := make([]byte, 4)
+	binary.LittleEndian.PutUint32(flags, l.Msg.Flags)
+
+	change := make([]byte, 4)
+	binary.LittleEndian.PutUint32(change, l.Msg.Change)
+
+	msg := []byte{
+		l.Msg.Family,
+		0, //padding per include/uapi/linux/rtnetlink.h
+		typ[0], typ[1],
 		index[0], index[1], index[2], index[3],
+		flags[0], flags[1], flags[2], flags[3],
+		change[0], change[1], change[2], change[3],
 	}
 
-}
+	ae := netlink.NewAttributeEncoder()
 
-// TODO(ry) wrap this up in a package-local structure and provide same
-// Marshal/Unmarshal interface as the rest of the netlink messages
-//
-// unmarshal an interface address message and its attributes
-func unmarshalIfaddrMsg(bs []byte) (unix.IfAddrmsg, []byte) {
-
-	index := binary.LittleEndian.Uint32(bs[4:8])
-
-	msg := unix.IfAddrmsg{
-		Family:    bs[0],
-		Prefixlen: bs[1],
-		Flags:     bs[2],
-		Scope:     bs[3],
-		Index:     index,
+	if l.Info != nil && l.Info.Name != "" {
+		ae.String(unix.IFLA_IFNAME, l.Info.Name)
 	}
-
-	return msg, bs[8:]
-}
-
-// read links information from netlink, returning a map of link objects keyed on
-// the interface number. it's not the case that links are monotonically
-// increasing in index, so the map is required.
-func readLinks() (map[uint32]*Link, error) {
-
-	conn, err := netlink.Dial(unix.NETLINK_ROUTE, nil)
-	if err != nil {
-		log.WithError(err).Error("failed to dial network")
-		return nil, err
-	}
-	defer conn.Close()
-
-	m := netlink.Message{
-		Header: netlink.Header{
-			Type: unix.RTM_GETLINK,
-			Flags: netlink.HeaderFlagsRequest |
-				netlink.HeaderFlagsAtomic |
-				netlink.HeaderFlagsRoot,
-		},
-		Data: marshalIfinfoMsg(unix.IfInfomsg{
-			Family: unix.AF_INET,
-		}),
-	}
-
-	resp, err := conn.Execute(m)
+	attrs, err := ae.Encode()
 	if err != nil {
 		return nil, err
 	}
-	log.Debugf("current baselayer links (%d)", len(resp))
 
-	lks := make(map[uint32]*Link)
-	for _, r := range resp {
+	for _, a := range l.Attributes() {
 
-		m, attrs := unmarshalIfinfoMsg(r.Data)
+		as, err := a.Marshal()
 		if err != nil {
-			log.WithError(err).Error("error reading ifinfo")
 			return nil, err
 		}
+		attrs = append(attrs, as...)
 
-		lnk := &Link{
-			Index: uint32(m.Index),
-		}
-		err := lnk.Unmarshal(attrs)
-		if err != nil {
-			continue
-		}
-
-		lks[lnk.Index] = lnk
 	}
 
-	// now that we have the links, go get their addresses
-	err = readLinkAddrs(lks)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, l := range lks {
-		log.WithFields(log.Fields{
-			"index":   l.Index,
-			"name":    l.Name,
-			"vni":     l.Vni,
-			"ipaddrs": fmt.Sprintf("%+v", l.IPAddrs),
-		}).Debug("link info")
-	}
-
-	return lks, nil
+	return append(msg, attrs...), nil
 
 }
 
-// Unmarshal a link from attributes
-func (lnk *Link) Unmarshal(attrs []byte) error {
+// Unmarshal reads a link and its attributes from a binary rtnetlink message.
+func (l *Link) Unmarshal(bs []byte) error {
 
-	ad, err := netlink.NewAttributeDecoder(attrs)
+	typ := binary.LittleEndian.Uint16(bs[2:4])
+	index := binary.LittleEndian.Uint32(bs[4:8])
+	flags := binary.LittleEndian.Uint32(bs[8:12])
+	change := binary.LittleEndian.Uint32(bs[12:16])
+
+	l.Info = &LinkInfo{}
+
+	l.Msg.Family = bs[0]
+	l.Msg.Type = typ
+	l.Msg.Index = int32(index)
+	l.Msg.Flags = flags
+	l.Msg.Change = change
+
+	ad, err := netlink.NewAttributeDecoder(bs[16:])
 	if err != nil {
 		log.WithError(err).Error("error creating decoder")
 		return err
 	}
 
-	// keep track of the current attribute kind, to get down to the vxlan
-	// attributes we have to spelunk through a few layers of attributes, most of
-	// the nested attribute types we don't care about and don't need to recurse
-	// down into. because of the sequential read nature of interacting with
-	// netlink attribute sets, we need to keep track of what attribute we are
-	// currently at and look back later when we hit an IFLA_INFO_DATA attribute
-	// to see if it's a data attribute we need to recurse into
-	var currentKind string
+	var lattr Attributes
+	var link uint32
 	for ad.Next() {
 		switch ad.Type() {
 
 		case unix.IFLA_IFNAME:
-			lnk.Name = ad.String()
+			l.Info.Name = ad.String()
 
 		case unix.IFLA_LINKINFO:
 
@@ -174,43 +157,37 @@ func (lnk *Link) Unmarshal(attrs []byte) error {
 
 				// keep track of the current attribute kind
 				case IFLA_INFO_KIND:
-					currentKind = nad.String()
+					attr := l.ApplyType(nad.String())
+					if attr != nil {
+						lattr = attr
+					}
 
 				case IFLA_INFO_DATA:
-					// only interested in vxlan things at the moment, if we hit a data
-					// attribute and were in a vxlan context, dive in
-					if currentKind != "vxlan" {
-						continue
-					}
-					nnad, err := netlink.NewAttributeDecoder(nad.Bytes())
-					if err != nil {
-						log.WithError(err).Warning("failed to create 2x nested decoder")
-						continue
-					}
-
-					// iterate through the vxlan info attributes
-					for nnad.Next() {
-						switch nnad.Type() {
-
-						case IFLA_VXLAN_ID:
-							// w00t, found the VNI
-							lnk.Vni = nnad.Uint32()
-
-						}
+					if lattr != nil {
+						lattr.Unmarshal(nad.Bytes())
 					}
 
 				}
 			}
 
+		case unix.IFLA_LINK:
+			link = ad.Uint32()
+
 		}
 	}
 
+	// grap veth specific things
+	veth, ok := lattr.(*Veth)
+	if ok {
+		veth.PeerIfx = link
+	}
+
 	// should not happen
-	if lnk.Name == "" {
+	if l.Info.Name == "" {
 
 		log.WithFields(log.Fields{
-			"index": lnk.Index,
-		}).Warn("link has no name - this is probably a bug")
+			"index": l.Msg.Index,
+		}).Error("link has no name - this is probably a bug")
 
 		return fmt.Errorf("no link name")
 
@@ -220,72 +197,184 @@ func (lnk *Link) Unmarshal(attrs []byte) error {
 
 }
 
-// ask netlink for all addresses it knows about and update the provided set of
-// links with addresses sets matched over link (interface) index.
-func readLinkAddrs(links map[uint32]*Link) error {
+// ReadLinks reads a set of links according to the provided specification. For
+// example, if you specify the address family, only links from that family will
+// be returned. Some basic attribute filtering is also implemented.
+func ReadLinks(spec *Link) ([]*Link, error) {
 
-	conn, err := netlink.Dial(unix.NETLINK_ROUTE, nil)
-	if err != nil {
-		log.WithError(err).Error("failed to dial network")
-		return err
-	}
-	defer conn.Close()
+	var result []*Link
 
 	m := netlink.Message{
 		Header: netlink.Header{
-			Type: unix.RTM_GETADDR,
-			Flags: netlink.HeaderFlagsRequest |
-				netlink.HeaderFlagsAtomic |
-				netlink.HeaderFlagsRoot,
+			Type:  unix.RTM_GETLINK,
+			Flags: netlink.HeaderFlagsRequest | netlink.HeaderFlagsAtomic,
 		},
-		Data: marshalIfaddrMsg(unix.IfAddrmsg{
-			Family: unix.AF_INET,
-		}),
 	}
 
-	resp, err := conn.Execute(m)
+	if spec.Msg.Index == 0 {
+		m.Header.Flags |= netlink.HeaderFlagsRoot
+	}
+
+	if spec == nil {
+		spec = &Link{}
+	}
+	data, err := spec.Marshal()
 	if err != nil {
-		return err
+		log.WithError(err).Error("failed to marshal spec link")
+		return nil, err
 	}
+	m.Data = data
 
-	log.Debugf("link addresses (%d)", len(resp))
+	err = withNetlink(func(conn *netlink.Conn) error {
 
-	for _, r := range resp {
-
-		m, attrs := unmarshalIfaddrMsg(r.Data)
+		resp, err := conn.Execute(m)
 		if err != nil {
-			log.WithError(err).Error("error reading ifaddr")
 			return err
 		}
 
-		ad, err := netlink.NewAttributeDecoder(attrs)
-		if err != nil {
-			log.WithError(err).Error("error creating decoder")
-			return err
-		}
+		for _, r := range resp {
 
-		for ad.Next() {
-			switch ad.Type() {
+			l := &Link{}
+			err := l.Unmarshal(r.Data)
+			if err != nil {
+				log.WithError(err).Error("error reading link")
+				return err
+			}
 
-			case unix.IFA_ADDRESS:
-
-				// try to get a link from the provided map that matches the interface
-				// index returned by netlink, if found add the address to that links
-				// address list
-				link, ok := links[m.Index]
-				if !ok {
-					log.WithFields(log.Fields{
-						"index": m.Index,
-					}).Warning("unknown interface index")
-					continue
-				}
-				link.IPAddrs = append(link.IPAddrs, net.IP(ad.Bytes()))
-
+			if l.Satisfies(spec) {
+				result = append(result, l)
 			}
 		}
+
+		return nil
+
+	})
+
+	return result, err
+
+}
+
+// ApplyType activates the link type defined by the provided string.
+func (l *Link) ApplyType(typ string) Attributes {
+
+	switch typ {
+
+	case "vxlan":
+		l.Info.Vxlan = &Vxlan{}
+		return l.Info.Vxlan
+
+	case "veth":
+		l.Info.Veth = &Veth{}
+		return l.Info.Veth
 
 	}
 
 	return nil
+
+}
+
+// Attributes returns a set of Attributes objects from the link.
+func (l *Link) Attributes() []Attributes {
+
+	var result []Attributes
+
+	if l.Info != nil && l.Info.Veth != nil {
+		result = append(result, l.Info.Veth)
+	}
+
+	if l.Info != nil && l.Info.Vxlan != nil {
+		result = append(result, l.Info.Veth)
+	}
+
+	return result
+
+}
+
+// Modifiers ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+// Add the link to the kernel.
+func (l *Link) Add() error {
+
+	return l.Modify(unix.RTM_NEWLINK)
+
+}
+
+// Present ensures the link is present.
+func (l *Link) Present() error {
+
+	err := l.Add()
+	if err != nil && err.Error() != "file exists" {
+		return err
+	}
+	return nil
+
+}
+
+// Del deletes the link from the kernel.
+func (l *Link) Del() error {
+
+	return l.Modify(unix.RTM_DELLINK)
+
+}
+
+// Absent ensures the link is absent.
+func (l *Link) Absent() error {
+
+	err := l.Del()
+	if err != nil && err.Error() != "no such device" {
+		return err
+	}
+	return nil
+
+}
+
+// Modify changes the link according to the supplied operation. Supported
+// operations include RTM_NEWLINK and RTM_DELLINK.
+func (l *Link) Modify(op uint16) error {
+
+	data, err := l.Marshal()
+	if err != nil {
+		log.WithError(err).Error("failed to marshal link")
+		return err
+	}
+
+	// netlink wrapper
+
+	flags := netlink.HeaderFlagsRequest |
+		netlink.HeaderFlagsAcknowledge |
+		netlink.HeaderFlagsExcl
+
+	if op == unix.RTM_NEWLINK {
+		flags |= netlink.HeaderFlagsCreate
+	}
+
+	m := netlink.Message{
+		Header: netlink.Header{
+			Type:  netlink.HeaderType(op),
+			Flags: flags,
+		},
+		Data: data,
+	}
+
+	return netlinkUpdate([]netlink.Message{m})
+
+}
+
+// Satisfies returns true if this link satisfies the provided spec.
+func (l *Link) Satisfies(spec *Link) bool {
+
+	if spec == nil {
+		return true
+	}
+
+	if l.Info != nil && spec.Info != nil && !stringSat(l.Info.Name, spec.Info.Name) {
+		return false
+	}
+
+	if l.Info != nil && spec.Info != nil && !l.Info.Veth.Satisfies(spec.Info.Veth) {
+		return false
+	}
+
+	return true
 
 }
