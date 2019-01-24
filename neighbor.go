@@ -209,7 +209,7 @@ func readNeighbors(family uint8) ([]Neighbor, error) {
 	// we need to send netlink an NdMsg
 	var data []byte
 	if family == unix.AF_BRIDGE {
-		data = marshalIfinfoMsg(unix.IfInfomsg{Family: family})
+		data, err = Link{Msg: unix.IfInfomsg{Family: family}}.Marshal()
 	} else {
 		data, err = NbrMsg{Msg: NdMsg{Family: family}}.Marshal()
 		if err != nil {
@@ -344,56 +344,5 @@ func modifyNeighbors(ns []Neighbor, op uint16) error {
 
 	// send netlink messages
 	return netlinkUpdate(messages)
-
-}
-
-// TODO(ry) wrap this up in a package-local structure and provide same
-// Marshal/Unmarshal interface as the rest of the netlink messages
-//
-// marshal an interface info message to bytes
-func marshalIfinfoMsg(m unix.IfInfomsg) []byte {
-
-	typ := make([]byte, 2)
-	binary.LittleEndian.PutUint16(typ, m.Type)
-
-	index := make([]byte, 4)
-	binary.LittleEndian.PutUint32(index, uint32(m.Index))
-
-	flags := make([]byte, 4)
-	binary.LittleEndian.PutUint32(flags, m.Flags)
-
-	change := make([]byte, 4)
-	binary.LittleEndian.PutUint32(change, m.Change)
-
-	return []byte{
-		m.Family,
-		0, //padding per include/uapi/linux/rtnetlink.h
-		typ[0], typ[1],
-		index[0], index[1], index[2], index[3],
-		flags[0], flags[1], flags[2], flags[3],
-		change[0], change[1], change[2], change[3],
-	}
-
-}
-
-// TODO(ry) wrap this up in a package-local structure and provide same
-// Marshal/Unmarshal interface as the rest of the netlink messages
-//
-// unmarshal an interface info message an its attributes from bytes
-func unmarshalIfinfoMsg(bs []byte) (unix.IfInfomsg, []byte) {
-
-	typ := binary.LittleEndian.Uint16(bs[2:4])
-	index := binary.LittleEndian.Uint32(bs[4:8])
-	flags := binary.LittleEndian.Uint32(bs[8:12])
-	change := binary.LittleEndian.Uint32(bs[12:16])
-
-	msg := unix.IfInfomsg{
-		Family: bs[0],
-		Type:   typ,
-		Index:  int32(index),
-		Flags:  flags,
-		Change: change,
-	}
-	return msg, bs[16:]
 
 }
