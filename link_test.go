@@ -2,6 +2,7 @@ package rtnetlink
 
 import (
 	"encoding/json"
+	"os"
 	"os/exec"
 	"testing"
 )
@@ -105,15 +106,31 @@ func Test_VethNamespace(t *testing.T) {
 			},
 		},
 	}
-	err := ve.Add()
+	err := va.Add()
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	out, err := exec.Command("ip", "netns", "add", "pizza").CombinedOutput()
+	if err != nil {
+		t.Fatal(string(out))
+	}
+
+	f, err := os.Open("/var/run/netns/pizza")
+	if err != nil {
+		t.Fatalf("failed to open netns file: %v", err)
+	}
+	nsfd := f.Fd()
+
 	vb := &Link{
 		Info: &LinkInfo{
 			Name: "vethB",
+			Ns:   uint32(nsfd),
 		},
+	}
+	err = vb.Set()
+	if err != nil {
+		t.Fatal(err)
 	}
 
 }

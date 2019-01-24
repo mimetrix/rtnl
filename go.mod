@@ -1,4 +1,4 @@
-module gitlab.com/mergetb/tech/rtnetlink
+module gitlab.com/mergetb/tech/rtnl
 
 require (
 	github.com/google/go-cmp v0.2.0 // indirect
