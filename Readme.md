@@ -45,7 +45,6 @@ Support for the remaining objects may come in time
 ### Virtual ethernet device management
 
 ```go
-
 // create a veth pair
 ve := &Link{
   Info: &LinkInfo{
