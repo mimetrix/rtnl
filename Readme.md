@@ -58,14 +58,7 @@ err := ve.Add()
 
 // add an address
 addr, err := ParseAddr("192.168.47.1/24")
-if err != nil {
-  t.Fatal(err)
-}
-
 err = ve.AddAddr(addr)
-if err != nil {
-  t.Fatal(err)
-}
 
 // put one side of the pair in the pizza namespace
 vb := &Link{
