@@ -59,12 +59,12 @@ func Test_AddVeth(t *testing.T) {
 
 	// read back and ensure peer equality
 
-	spec := &Link{
-		Info: &LinkInfo{
-			Name: "vethA",
-		},
+	lnk, err := GetLink("vethA")
+	if ve.Info.Veth.Peer != lnk.Info.Veth.Peer {
+		t.Fatalf("peer of read link not correct %v != %v",
+			ve.Info.Veth.Peer, lnk.Info.Veth.Peer,
+		)
 	}
-	err = spec.Read()
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -301,6 +301,17 @@ func (l *Link) Read() error {
 
 }
 
+func GetLink(name string) (*Link, error) {
+	link := &Link{
+		Info: &LinkInfo{
+			Name: name,
+		},
+	}
+	err := link.Read()
+
+	return link, err
+}
+
 // ApplyType activates the link type defined by the provided string.
 func (l *Link) ApplyType(typ string) Attributes {
 
