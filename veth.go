@@ -1,6 +1,8 @@
 package rtnl
 
 import (
+	"fmt"
+
 	"github.com/mdlayher/netlink"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
@@ -60,15 +62,12 @@ func (v *Veth) Marshal() ([]byte, error) {
 // Unmarshal reads a veth from a binary set of attributes.
 func (v *Veth) Unmarshal(buf []byte) error {
 
-	log.Println("vern fonk?")
 	ad, err := netlink.NewAttributeDecoder(buf)
 	if err != nil {
 		return err
 	}
-	log.Println("honk?")
 
 	for ad.Next() {
-		log.Println("kerdlonk")
 		switch ad.Type() {
 
 		case VETH_INFO_PEER:
@@ -78,12 +77,10 @@ func (v *Veth) Unmarshal(buf []byte) error {
 				return err
 			}
 
-			log.Println("schlonk")
 			for ad1.Next() {
 				switch ad1.Type() {
 
 				case unix.IFLA_IFNAME:
-					log.Println("bonk")
 					v.Peer = ad1.String()
 
 				}
@@ -92,7 +89,7 @@ func (v *Veth) Unmarshal(buf []byte) error {
 		}
 	}
 
-	return nil
+	return v.ResolvePeer()
 
 }
 
@@ -116,23 +113,33 @@ func (v *Veth) Satisfies(spec *Veth) bool {
 }
 
 // ResolvePeer fills in this veth's peer interface name from its index.
-func (v *Veth) ResolvePeer() {
+func (v *Veth) ResolvePeer() error {
 
-	spec := &Link{}
+	spec := NewLink()
 	spec.Msg.Index = int32(v.PeerIfx)
 	result, err := ReadLinks(spec)
 	if err != nil {
 		log.WithError(err).Error("read links failed")
+		return err
 	}
 
 	if len(result) == 0 {
 		log.WithFields(log.Fields{"index": v.PeerIfx}).Error("peer does not exist")
-		return
+		return fmt.Errorf("not found")
 	}
 	if len(result) > 1 {
 		log.WithFields(log.Fields{"index": v.PeerIfx}).Error("multiple peers")
+		return fmt.Errorf("not unique")
 	}
 
 	v.Peer = result[0].Info.Name
+	return nil
+
+}
+
+// Reolve handle attributes
+func (v *Veth) Resolve() error {
+
+	return v.ResolvePeer()
 
 }

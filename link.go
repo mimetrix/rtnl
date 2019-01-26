@@ -53,6 +53,11 @@ type Link struct {
 	Info *LinkInfo
 }
 
+// NewLink creates a new empty link data structure
+func NewLink() *Link {
+	return &Link{Info: &LinkInfo{}}
+}
+
 // LinkInfo holds link attribute data
 type LinkInfo struct {
 	Name string
@@ -262,6 +267,40 @@ func ReadLinks(spec *Link) ([]*Link, error) {
 
 }
 
+func (l *Link) Read() error {
+
+	spec := NewLink()
+	spec.Msg.Index = l.Msg.Index
+
+	if l.Info != nil {
+		spec.Info.Name = l.Info.Name
+	}
+
+	links, err := ReadLinks(spec)
+	if err != nil {
+		return err
+	}
+
+	if len(links) == 0 {
+		return fmt.Errorf("not found")
+	}
+	if len(links) > 1 {
+		return fmt.Errorf("not unique")
+	}
+
+	*l = *links[0]
+
+	for _, a := range l.Attributes() {
+		err := a.Resolve()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+
+}
+
 // ApplyType activates the link type defined by the provided string.
 func (l *Link) ApplyType(typ string) Attributes {
 
@@ -303,7 +342,13 @@ func (l *Link) Attributes() []Attributes {
 // Add the link to the kernel.
 func (l *Link) Add() error {
 
-	return l.Modify(unix.RTM_NEWLINK)
+	err := l.Modify(unix.RTM_NEWLINK)
+	if err != nil {
+		return err
+	}
+
+	// read kernel info about the link
+	return l.Read()
 
 }
 
@@ -372,6 +417,13 @@ func (l *Link) Modify(op uint16) error {
 	}
 
 	return netlinkUpdate([]netlink.Message{m})
+
+}
+
+func (l *Link) AddAddr(addr *Address) error {
+
+	addr.Msg.Index = uint32(l.Msg.Index)
+	return AddAddr(addr)
 
 }
 

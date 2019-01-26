@@ -14,6 +14,7 @@ import (
 type Attributes interface {
 	Marshal() ([]byte, error)
 	Unmarshal([]byte) error
+	Resolve() error
 }
 
 func withNetlink(f func(*netlink.Conn) error) error {

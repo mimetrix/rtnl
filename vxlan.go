@@ -61,3 +61,10 @@ func (v *Vxlan) Unmarshal(buf []byte) error {
 	return nil
 
 }
+
+// Resolve handle attributes
+func (v *Vxlan) Resolve() error {
+
+	return nil
+
+}

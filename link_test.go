@@ -27,6 +27,9 @@ func Test_AddVeth(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if ve.Info.Veth.Peer != "vethB" {
+		t.Fatal("peer lost")
+	}
 
 	// ensure iproute2 sees it and parameters are correct
 	out, err := exec.Command(
@@ -61,22 +64,9 @@ func Test_AddVeth(t *testing.T) {
 			Name: "vethA",
 		},
 	}
-	links, err := ReadLinks(spec)
+	err = spec.Read()
 	if err != nil {
 		t.Fatal(err)
-	}
-	if len(links) == 0 {
-		t.Fatal("could not find the link we just created")
-	}
-	if len(links) > 1 {
-		t.Fatalf("there are %d links called vethA?", len(links))
-	}
-	if links[0].Info.Veth == nil {
-		t.Fatal("veth has no veth attributes")
-	}
-	links[0].Info.Veth.ResolvePeer()
-	if links[0].Info.Veth.Peer != ve.Info.Veth.Peer {
-		t.Fatalf("peer equality test failed - %+v, %+v", links[0].Info, links[0].Info.Veth)
 	}
 
 	err = ve.Present()
@@ -165,6 +155,38 @@ func Test_VethNamespace(t *testing.T) {
 	out, err = exec.Command("ip", "netns", "del", "pizza").CombinedOutput()
 	if err != nil {
 		t.Fatal(string(out))
+	}
+
+}
+
+func Test_VethAddress(t *testing.T) {
+
+	va := &Link{
+		Info: &LinkInfo{
+			Name: "vethA",
+			Veth: &Veth{
+				Peer: "vethB",
+			},
+		},
+	}
+	err := va.Add()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	addr, err := ParseAddr("192.168.47.1/24")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = va.AddAddr(addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = va.Del()
+	if err != nil {
+		t.Fatal(err)
 	}
 
 }

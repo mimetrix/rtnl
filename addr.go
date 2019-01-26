@@ -17,13 +17,51 @@ type Address struct {
 	Info *AddrInfo
 }
 
+// Create a new address struct
+func NewAddress() *Address {
+	return &Address{
+		Info: &AddrInfo{},
+	}
+}
+
 // AddrInfo holds address attribute data.
 type AddrInfo struct {
-	Address   net.IP
+	Address   *net.IPNet
 	Local     net.IP
 	Label     string
 	Broadcast net.IP
 	Anycast   net.IP
+}
+
+// Return the address family, one of
+//   - AF_UNSPEC
+//   - AF_INET
+//   - AF_INET6
+func (a Address) Family() uint8 {
+
+	if a.Info == nil || a.Info.Address == nil {
+		return unix.AF_UNSPEC
+	}
+
+	i4 := a.Info.Address.IP.To4()
+	if i4 != nil {
+		a.Info.Address.IP = i4
+		return unix.AF_INET
+	}
+
+	return unix.AF_INET6
+
+}
+
+func (a Address) Prefix() uint8 {
+
+	if a.Info == nil || a.Info.Address == nil {
+		return 0
+	}
+
+	size, _ := a.Info.Address.Mask.Size()
+	return uint8(size)
+
 }
 
 // Marshal turns an address into a binary rtnetlink message and a set of
@@ -34,8 +72,8 @@ func (a Address) Marshal() ([]byte, error) {
 	binary.LittleEndian.PutUint32(index, a.Msg.Index)
 
 	buf := []byte{
-		a.Msg.Family,
-		a.Msg.Prefixlen,
+		a.Family(),
+		a.Prefix(),
 		a.Msg.Flags,
 		a.Msg.Scope,
 		index[0], index[1], index[2], index[3],
@@ -44,19 +82,25 @@ func (a Address) Marshal() ([]byte, error) {
 	ae := netlink.NewAttributeEncoder()
 
 	if a.Info.Address != nil {
-		ae.Bytes(unix.IFA_ADDRESS, a.Info.Address)
+
+		ae.Bytes(unix.IFA_ADDRESS, a.Info.Address.IP)
+
+		if a.Info.Local == nil {
+			ae.Bytes(unix.IFA_LOCAL, a.Info.Address.IP)
+		}
+
 	}
 	if a.Info.Local != nil {
-		ae.Bytes(unix.IFA_LOCAL, a.Info.Local)
+		ae.String(unix.IFA_LOCAL, a.Info.Local.String())
 	}
 	if a.Info.Label != "" {
 		ae.String(unix.IFA_LABEL, a.Info.Label)
 	}
 	if a.Info.Broadcast != nil {
-		ae.Bytes(unix.IFA_BROADCAST, a.Info.Broadcast)
+		ae.String(unix.IFA_BROADCAST, a.Info.Broadcast.String())
 	}
 	if a.Info.Anycast != nil {
-		ae.Bytes(unix.IFA_ANYCAST, a.Info.Anycast)
+		ae.String(unix.IFA_ANYCAST, a.Info.Anycast.String())
 	}
 
 	attrs, err := ae.Encode()
@@ -91,19 +135,26 @@ func (a *Address) Unmarshal(buf []byte) error {
 		switch ad.Type() {
 
 		case unix.IFA_ADDRESS:
-			a.Info.Address = net.IP(ad.Bytes())
+			_, ipnet, err := net.ParseCIDR(ad.String())
+			if err != nil {
+				return err
+			}
+			if ipnet == nil {
+				continue
+			}
+			a.Info.Address = ipnet
 
 		case unix.IFA_LOCAL:
-			a.Info.Local = net.IP(ad.Bytes())
+			a.Info.Local = net.ParseIP(ad.String())
 
 		case unix.IFA_LABEL:
 			a.Info.Label = ad.String()
 
 		case unix.IFA_BROADCAST:
-			a.Info.Broadcast = net.IP(ad.Bytes())
+			a.Info.Broadcast = net.ParseIP(ad.String())
 
 		case unix.IFA_ANYCAST:
-			a.Info.Anycast = net.IP(ad.Bytes())
+			a.Info.Anycast = net.ParseIP(ad.String())
 
 		}
 	}
@@ -163,5 +214,59 @@ func ReadAddrs(spec *Address) ([]*Address, error) {
 	})
 
 	return result, err
+
+}
+
+// AddAddr adds the specified address.
+func AddAddr(addr *Address) error {
+
+	return AddAddrs([]*Address{addr})
+
+}
+
+// AddAddrs adds the specified addresses.
+func AddAddrs(addrs []*Address) error {
+
+	var messages []netlink.Message
+
+	for _, addr := range addrs {
+
+		data, err := addr.Marshal()
+		if err != nil {
+			log.WithError(err).Error("failed to marshal address")
+			return err
+		}
+
+		m := netlink.Message{
+			Header: netlink.Header{
+				Type: unix.RTM_NEWADDR,
+				Flags: netlink.HeaderFlagsRequest |
+					netlink.HeaderFlagsAcknowledge |
+					netlink.HeaderFlagsCreate |
+					netlink.HeaderFlagsAppend,
+			},
+			Data: data,
+		}
+
+		messages = append(messages, m)
+
+	}
+
+	return netlinkUpdate(messages)
+
+}
+
+func ParseAddr(addr string) (*Address, error) {
+
+	ip, ipaddr, err := net.ParseCIDR(addr)
+	if err != nil {
+		return nil, err
+	}
+	ipaddr.IP = ip
+
+	a := NewAddress()
+	a.Info.Address = ipaddr
+
+	return a, nil
 
 }
