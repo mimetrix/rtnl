@@ -184,6 +184,21 @@ func Test_VethAddress(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	err = va.Up()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	vb, err := GetLink("vethB")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = vb.Up()
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	err = va.Del()
 	if err != nil {
 		t.Fatal(err)

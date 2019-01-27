@@ -399,6 +399,22 @@ func (l *Link) Absent() error {
 
 }
 
+// Up brings up the link
+func (l *Link) Up() error {
+
+	l.Msg.Flags |= unix.IFF_UP
+	return l.Modify(unix.RTM_SETLINK)
+
+}
+
+// Up down brings down the link
+func (l *Link) Down() error {
+
+	l.Msg.Flags &= ^uint32(unix.IFF_UP)
+	return l.Modify(unix.RTM_SETLINK)
+
+}
+
 // Modify changes the link according to the supplied operation. Supported
 // operations include RTM_NEWLINK, RTM_SETLINK and RTM_DELLINK.
 func (l *Link) Modify(op uint16) error {
