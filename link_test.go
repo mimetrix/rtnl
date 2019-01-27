@@ -233,4 +233,14 @@ func Test_Bridge(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	err = va.Del()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = br.Del()
+	if err != nil {
+		t.Fatal(err)
+	}
+
 }
