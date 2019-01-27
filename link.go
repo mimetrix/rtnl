@@ -65,10 +65,19 @@ type LinkInfo struct {
 	// The following are optional link properties and are null if not present
 
 	// network namespace file descriptor
-	Ns    uint32
-	Addrs []Address
-	Veth  *Veth
+	Ns uint32
+
+	// bridge master
+	Master uint32
+
+	// veth properties
+	Veth *Veth
+
+	// vxlan properties
 	Vxlan *Vxlan
+
+	// bridge properties
+	Bridge *Bridge
 }
 
 // Methods ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -101,6 +110,9 @@ func (l Link) Marshal() ([]byte, error) {
 
 	if l.Info != nil && l.Info.Name != "" {
 		ae.String(unix.IFLA_IFNAME, l.Info.Name)
+	}
+	if l.Info != nil && l.Info.Master != 0 {
+		ae.Uint32(unix.IFLA_MASTER, l.Info.Master)
 	}
 	if l.Info != nil && l.Info.Ns != 0 {
 		ae.Uint32(unix.IFLA_NET_NS_FD, l.Info.Ns)
@@ -153,6 +165,9 @@ func (l *Link) Unmarshal(bs []byte) error {
 
 		case unix.IFLA_IFNAME:
 			l.Info.Name = ad.String()
+
+		case unix.IFLA_MASTER:
+			l.Info.Master = ad.Uint32()
 
 		case unix.IFLA_LINKINFO:
 
@@ -342,6 +357,10 @@ func (l *Link) Attributes() []Attributes {
 
 	if l.Info != nil && l.Info.Vxlan != nil {
 		result = append(result, l.Info.Veth)
+	}
+
+	if l.Info != nil && l.Info.Bridge != nil {
+		result = append(result, l.Info.Bridge)
 	}
 
 	return result

@@ -205,3 +205,32 @@ func Test_VethAddress(t *testing.T) {
 	}
 
 }
+
+func Test_Bridge(t *testing.T) {
+
+	br := &Link{
+		Info: &LinkInfo{
+			Name:   "br47",
+			Bridge: &Bridge{},
+		},
+	}
+	err := br.Add()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	va := &Link{
+		Info: &LinkInfo{
+			Name:   "vethA",
+			Master: uint32(br.Msg.Index),
+			Veth: &Veth{
+				Peer: "vethB",
+			},
+		},
+	}
+	err = va.Add()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+}
