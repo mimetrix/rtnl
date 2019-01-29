@@ -315,6 +315,17 @@ func GetLink(name string) (*Link, error) {
 	return link, err
 }
 
+func GetLinkByIndex(index int32) (*Link, error) {
+	link := &Link{
+		Msg: unix.IfInfomsg{
+			Index: index,
+		},
+	}
+	err := link.Read()
+
+	return link, err
+}
+
 // ApplyType activates the link type defined by the provided string.
 func (l *Link) ApplyType(typ string) Attributes {
 
