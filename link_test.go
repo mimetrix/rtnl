@@ -2,8 +2,10 @@ package rtnl
 
 import (
 	"encoding/json"
+	"net"
 	"os"
 	"os/exec"
+	"reflect"
 	"testing"
 )
 
@@ -239,6 +241,52 @@ func Test_Bridge(t *testing.T) {
 	}
 
 	err = br.Del()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+}
+
+func Test_Vxlan(t *testing.T) {
+
+	lo, err := GetLink("lo")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	vx := &Link{
+		Info: &LinkInfo{
+			Name: "vtep47",
+			Vxlan: &Vxlan{
+				Vni:     47,
+				DstPort: 4789,
+				Local:   net.ParseIP("1.2.3.4"),
+				Link:    uint32(lo.Msg.Index),
+			},
+		},
+	}
+
+	err = vx.Add()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	xv, err := GetLink("vtep47")
+	if err != nil {
+		t.Error(err)
+	}
+	if err == nil {
+		if xv.Info.Vxlan == nil {
+			t.Error("no vxlan data")
+		}
+		if !reflect.DeepEqual(*xv.Info.Vxlan, *vx.Info.Vxlan) {
+			t.Error("vxlans do not match")
+			t.Logf("expected: %#v", *vx.Info.Vxlan)
+			t.Logf("actual: %#v", *xv.Info.Vxlan)
+		}
+	}
+
+	err = vx.Del()
 	if err != nil {
 		t.Fatal(err)
 	}

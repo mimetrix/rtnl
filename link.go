@@ -33,18 +33,6 @@ const (
 	IFLA_INFO_DATA
 )
 
-// vxlan attribute types
-const (
-	IFLA_VXLAN_UNSPEC uint16 = iota
-	IFLA_VXLAN_ID
-)
-
-// veth attribute types
-const (
-	VETH_INFO_UNSPEC uint16 = iota
-	VETH_INFO_PEER
-)
-
 // Data Structures ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 // Link consolidates link information from rtnetlink
@@ -356,7 +344,7 @@ func (l *Link) Attributes() []Attributes {
 	}
 
 	if l.Info != nil && l.Info.Vxlan != nil {
-		result = append(result, l.Info.Veth)
+		result = append(result, l.Info.Vxlan)
 	}
 
 	if l.Info != nil && l.Info.Bridge != nil {

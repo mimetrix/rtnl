@@ -8,6 +8,12 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// veth attribute types
+const (
+	VETH_INFO_UNSPEC uint16 = iota
+	VETH_INFO_PEER
+)
+
 // Veth encapsulates information about virtual ethernet devices
 type Veth struct {
 	Peer    string
