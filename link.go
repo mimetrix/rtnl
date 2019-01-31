@@ -386,9 +386,15 @@ func (l *Link) Add() error {
 func (l *Link) Present() error {
 
 	err := l.Add()
-	if err != nil && err.Error() != "file exists" {
-		return err
+
+	if err != nil {
+		if err.Error() != "file exists" {
+			return err
+		}
+		// link already exits, so get it's info
+		return l.Read()
 	}
+
 	return nil
 
 }

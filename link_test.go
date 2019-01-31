@@ -216,8 +216,15 @@ func Test_Bridge(t *testing.T) {
 			Bridge: &Bridge{},
 		},
 	}
-	err := br.Add()
+	err := br.Present()
 	if err != nil {
+		t.Fatal(err)
+	}
+
+	addr, _ := ParseAddr("1.2.3.4/24")
+	err = br.AddAddr(addr)
+	if err != nil {
+		br.Del()
 		t.Fatal(err)
 	}
 
