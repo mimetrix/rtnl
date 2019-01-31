@@ -227,13 +227,14 @@ func ReadLinks(spec *Link) ([]*Link, error) {
 		},
 	}
 
+	if spec == nil {
+		spec = &Link{}
+	}
+
 	if spec.Msg.Index == 0 {
 		m.Header.Flags |= netlink.HeaderFlagsRoot
 	}
 
-	if spec == nil {
-		spec = &Link{}
-	}
 	data, err := spec.Marshal()
 	if err != nil {
 		log.WithError(err).Error("failed to marshal spec link")

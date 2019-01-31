@@ -3,6 +3,8 @@ package rtnl
 import (
 	"encoding/binary"
 	"fmt"
+	"os"
+	"runtime"
 
 	"github.com/mdlayher/netlink"
 	log "github.com/sirupsen/logrus"
@@ -19,7 +21,36 @@ type Attributes interface {
 
 func withNetlink(f func(*netlink.Conn) error) error {
 
-	conn, err := netlink.Dial(unix.NETLINK_ROUTE, nil)
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	thisNS, err := os.Open(
+		fmt.Sprintf("/proc/%d/task/%d/ns/net", os.Getpid(), unix.Gettid()))
+	if err != nil {
+		log.WithError(err).Error("failed to open this netns")
+		return fmt.Errorf("failed to open netns")
+	}
+	defer thisNS.Close()
+
+	conn, err := netlink.Dial(
+		unix.NETLINK_ROUTE, &netlink.Config{NetNS: int(thisNS.Fd())})
+	if err != nil {
+		log.WithError(err).Error("failed to dial netlink")
+		return err
+	}
+	defer conn.Close()
+
+	return f(conn)
+
+}
+
+func withNsNetlink(ns int, f func(*netlink.Conn) error) error {
+
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	conn, err := netlink.Dial(
+		unix.NETLINK_ROUTE, &netlink.Config{NetNS: ns})
 	if err != nil {
 		log.WithError(err).Error("failed to dial netlink")
 		return err
