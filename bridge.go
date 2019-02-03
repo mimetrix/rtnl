@@ -53,7 +53,7 @@ type Bridge struct {
 	VlanAware bool
 }
 
-func (b *Bridge) Marshal() ([]byte, error) {
+func (b *Bridge) Marshal(ctx *Context) ([]byte, error) {
 
 	ae := netlink.NewAttributeEncoder()
 	ae.Do(unix.IFLA_LINKINFO, func() ([]byte, error) {
@@ -82,7 +82,7 @@ func (b *Bridge) Marshal() ([]byte, error) {
 
 }
 
-func (b *Bridge) Unmarshal(buf []byte) error {
+func (b *Bridge) Unmarshal(ctx *Context, buf []byte) error {
 
 	ad, err := netlink.NewAttributeDecoder(buf)
 	if err != nil {
@@ -106,7 +106,7 @@ func (b *Bridge) Unmarshal(buf []byte) error {
 
 }
 
-func (b *Bridge) Resolve() error {
+func (b *Bridge) Resolve(ctx *Context) error {
 
 	return nil
 

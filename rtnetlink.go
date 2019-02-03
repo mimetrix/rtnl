@@ -11,12 +11,16 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+type Context struct {
+	Ns int
+}
+
 // Attributes is an interface that is used on all types that can be marshaled
 // and unmarshaled from rtnetlink attributes
 type Attributes interface {
-	Marshal() ([]byte, error)
-	Unmarshal([]byte) error
-	Resolve() error
+	Marshal(*Context) ([]byte, error)
+	Unmarshal(*Context, []byte) error
+	Resolve(*Context) error
 }
 
 func withNetlink(f func(*netlink.Conn) error) error {
@@ -61,8 +65,8 @@ func withNsNetlink(ns int, f func(*netlink.Conn) error) error {
 
 }
 
-func netlinkUpdate(messages []netlink.Message) error {
-	return withNetlink(func(c *netlink.Conn) error {
+func netlinkUpdate(ctx *Context, messages []netlink.Message) error {
+	return withNsNetlink(ctx.Ns, func(c *netlink.Conn) error {
 
 		for _, m := range messages {
 

@@ -71,7 +71,7 @@ type LinkInfo struct {
 // Methods ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 // Marshal turns a link into a binary rtnetlink message and a set of attributes.
-func (l Link) Marshal() ([]byte, error) {
+func (l Link) Marshal(ctx *Context) ([]byte, error) {
 
 	typ := make([]byte, 2)
 	binary.LittleEndian.PutUint16(typ, l.Msg.Type)
@@ -112,7 +112,7 @@ func (l Link) Marshal() ([]byte, error) {
 
 	for _, a := range l.Attributes() {
 
-		as, err := a.Marshal()
+		as, err := a.Marshal(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -125,7 +125,7 @@ func (l Link) Marshal() ([]byte, error) {
 }
 
 // Unmarshal reads a link and its attributes from a binary rtnetlink message.
-func (l *Link) Unmarshal(bs []byte) error {
+func (l *Link) Unmarshal(ctx *Context, bs []byte) error {
 
 	typ := binary.LittleEndian.Uint16(bs[2:4])
 	index := binary.LittleEndian.Uint32(bs[4:8])
@@ -177,7 +177,7 @@ func (l *Link) Unmarshal(bs []byte) error {
 
 				case IFLA_INFO_DATA:
 					if lattr != nil {
-						lattr.Unmarshal(nad.Bytes())
+						lattr.Unmarshal(ctx, nad.Bytes())
 					}
 
 				}
@@ -216,7 +216,7 @@ func (l *Link) Unmarshal(bs []byte) error {
 // ReadLinks reads a set of links according to the provided specification. For
 // example, if you specify the address family, only links from that family will
 // be returned. Some basic attribute filtering is also implemented.
-func ReadLinks(spec *Link) ([]*Link, error) {
+func ReadLinks(ctx *Context, spec *Link) ([]*Link, error) {
 
 	var result []*Link
 
@@ -235,14 +235,14 @@ func ReadLinks(spec *Link) ([]*Link, error) {
 		m.Header.Flags |= netlink.HeaderFlagsRoot
 	}
 
-	data, err := spec.Marshal()
+	data, err := spec.Marshal(ctx)
 	if err != nil {
 		log.WithError(err).Error("failed to marshal spec link")
 		return nil, err
 	}
 	m.Data = data
 
-	err = withNetlink(func(conn *netlink.Conn) error {
+	err = withNsNetlink(ctx.Ns, func(conn *netlink.Conn) error {
 
 		resp, err := conn.Execute(m)
 		if err != nil {
@@ -252,7 +252,7 @@ func ReadLinks(spec *Link) ([]*Link, error) {
 		for _, r := range resp {
 
 			l := &Link{}
-			err := l.Unmarshal(r.Data)
+			err := l.Unmarshal(ctx, r.Data)
 			if err != nil {
 				log.WithError(err).Error("error reading link")
 				return err
@@ -271,7 +271,7 @@ func ReadLinks(spec *Link) ([]*Link, error) {
 
 }
 
-func (l *Link) Read() error {
+func (l *Link) Read(ctx *Context) error {
 
 	spec := NewLink()
 	spec.Msg.Index = l.Msg.Index
@@ -280,7 +280,7 @@ func (l *Link) Read() error {
 		spec.Info.Name = l.Info.Name
 	}
 
-	links, err := ReadLinks(spec)
+	links, err := ReadLinks(ctx, spec)
 	if err != nil {
 		return err
 	}
@@ -295,7 +295,7 @@ func (l *Link) Read() error {
 	*l = *links[0]
 
 	for _, a := range l.Attributes() {
-		err := a.Resolve()
+		err := a.Resolve(ctx)
 		if err != nil {
 			return err
 		}
@@ -305,24 +305,24 @@ func (l *Link) Read() error {
 
 }
 
-func GetLink(name string) (*Link, error) {
+func GetLink(ctx *Context, name string) (*Link, error) {
 	link := &Link{
 		Info: &LinkInfo{
 			Name: name,
 		},
 	}
-	err := link.Read()
+	err := link.Read(ctx)
 
 	return link, err
 }
 
-func GetLinkByIndex(index int32) (*Link, error) {
+func GetLinkByIndex(ctx *Context, index int32) (*Link, error) {
 	link := &Link{
 		Msg: unix.IfInfomsg{
 			Index: index,
 		},
 	}
-	err := link.Read()
+	err := link.Read(ctx)
 
 	return link, err
 }
@@ -370,29 +370,29 @@ func (l *Link) Attributes() []Attributes {
 // Modifiers ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 // Add the link to the kernel.
-func (l *Link) Add() error {
+func (l *Link) Add(ctx *Context) error {
 
-	err := l.Modify(unix.RTM_NEWLINK)
+	err := l.Modify(ctx, unix.RTM_NEWLINK)
 	if err != nil {
 		return err
 	}
 
 	// read kernel info about the link
-	return l.Read()
+	return l.Read(ctx)
 
 }
 
 // Present ensures the link is present.
-func (l *Link) Present() error {
+func (l *Link) Present(ctx *Context) error {
 
-	err := l.Add()
+	err := l.Add(ctx)
 
 	if err != nil {
 		if err.Error() != "file exists" {
 			return err
 		}
 		// link already exits, so get it's info
-		return l.Read()
+		return l.Read(ctx)
 	}
 
 	return nil
@@ -400,23 +400,23 @@ func (l *Link) Present() error {
 }
 
 // Set sets link attributes
-func (l *Link) Set() error {
+func (l *Link) Set(ctx *Context) error {
 
-	return l.Modify(unix.RTM_SETLINK)
+	return l.Modify(ctx, unix.RTM_SETLINK)
 
 }
 
 // Del deletes the link from the kernel.
-func (l *Link) Del() error {
+func (l *Link) Del(ctx *Context) error {
 
-	return l.Modify(unix.RTM_DELLINK)
+	return l.Modify(ctx, unix.RTM_DELLINK)
 
 }
 
 // Absent ensures the link is absent.
-func (l *Link) Absent() error {
+func (l *Link) Absent(ctx *Context) error {
 
-	err := l.Del()
+	err := l.Del(ctx)
 	if err != nil && err.Error() != "no such device" {
 		return err
 	}
@@ -425,16 +425,16 @@ func (l *Link) Absent() error {
 }
 
 // Up brings up the link
-func (l *Link) Up() error {
+func (l *Link) Up(ctx *Context) error {
 
-	err := l.Read()
+	err := l.Read(ctx)
 	if err != nil {
 		return nil
 	}
 
 	if l.Msg.Flags&unix.IFF_UP == 0 {
 		l.Msg.Flags |= unix.IFF_UP
-		return l.Modify(unix.RTM_SETLINK)
+		return l.Modify(ctx, unix.RTM_SETLINK)
 	}
 
 	return nil
@@ -442,16 +442,16 @@ func (l *Link) Up() error {
 }
 
 // Up down brings down the link
-func (l *Link) Down() error {
+func (l *Link) Down(ctx *Context) error {
 
-	err := l.Read()
+	err := l.Read(ctx)
 	if err != nil {
 		return nil
 	}
 
 	if l.Msg.Flags&unix.IFF_UP != 0 {
 		l.Msg.Flags &= ^uint32(unix.IFF_UP)
-		return l.Modify(unix.RTM_SETLINK)
+		return l.Modify(ctx, unix.RTM_SETLINK)
 	}
 
 	return nil
@@ -460,9 +460,9 @@ func (l *Link) Down() error {
 
 // Modify changes the link according to the supplied operation. Supported
 // operations include RTM_NEWLINK, RTM_SETLINK and RTM_DELLINK.
-func (l *Link) Modify(op uint16) error {
+func (l *Link) Modify(ctx *Context, op uint16) error {
 
-	data, err := l.Marshal()
+	data, err := l.Marshal(ctx)
 	if err != nil {
 		log.WithError(err).Error("failed to marshal link")
 		return err
@@ -486,14 +486,14 @@ func (l *Link) Modify(op uint16) error {
 		Data: data,
 	}
 
-	return netlinkUpdate([]netlink.Message{m})
+	return netlinkUpdate(ctx, []netlink.Message{m})
 
 }
 
-func (l *Link) AddAddr(addr *Address) error {
+func (l *Link) AddAddr(ctx *Context, addr *Address) error {
 
 	addr.Msg.Index = uint32(l.Msg.Index)
-	return AddAddr(addr)
+	return AddAddr(ctx, addr)
 
 }
 

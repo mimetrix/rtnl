@@ -9,6 +9,8 @@ import (
 	"testing"
 )
 
+var ctx = &Context{Ns: 0}
+
 type IProute2Link struct {
 	Link   string
 	Ifname string
@@ -25,7 +27,7 @@ func Test_AddVeth(t *testing.T) {
 			},
 		},
 	}
-	err := ve.Add()
+	err := ve.Add(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +63,7 @@ func Test_AddVeth(t *testing.T) {
 
 	// read back and ensure peer equality
 
-	lnk, err := GetLink("vethA")
+	lnk, err := GetLink(ctx, "vethA")
 	if ve.Info.Veth.Peer != lnk.Info.Veth.Peer {
 		t.Fatalf("peer of read link not correct %v != %v",
 			ve.Info.Veth.Peer, lnk.Info.Veth.Peer,
@@ -71,17 +73,17 @@ func Test_AddVeth(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = ve.Present()
+	err = ve.Present(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = ve.Del()
+	err = ve.Del(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = ve.Absent()
+	err = ve.Absent(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +100,7 @@ func Test_VethNamespace(t *testing.T) {
 			},
 		},
 	}
-	err := va.Add()
+	err := va.Add(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +122,7 @@ func Test_VethNamespace(t *testing.T) {
 			Ns:   uint32(nsfd),
 		},
 	}
-	err = vb.Set()
+	err = vb.Set(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +154,7 @@ func Test_VethNamespace(t *testing.T) {
 
 	// cleanup
 
-	va.Del()
+	va.Del(ctx)
 
 	out, err = exec.Command("ip", "netns", "del", "pizza").CombinedOutput()
 	if err != nil {
@@ -171,7 +173,7 @@ func Test_VethAddress(t *testing.T) {
 			},
 		},
 	}
-	err := va.Add()
+	err := va.Add(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,27 +183,27 @@ func Test_VethAddress(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = va.AddAddr(addr)
+	err = va.AddAddr(ctx, addr)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = va.Up()
+	err = va.Up(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	vb, err := GetLink("vethB")
+	vb, err := GetLink(ctx, "vethB")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = vb.Up()
+	err = vb.Up(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = va.Del()
+	err = va.Del(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -216,15 +218,15 @@ func Test_Bridge(t *testing.T) {
 			Bridge: &Bridge{},
 		},
 	}
-	err := br.Present()
+	err := br.Present(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	addr, _ := ParseAddr("1.2.3.4/24")
-	err = br.AddAddr(addr)
+	err = br.AddAddr(ctx, addr)
 	if err != nil {
-		br.Del()
+		br.Del(ctx)
 		t.Fatal(err)
 	}
 
@@ -237,17 +239,17 @@ func Test_Bridge(t *testing.T) {
 			},
 		},
 	}
-	err = va.Add()
+	err = va.Add(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = va.Del()
+	err = va.Del(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = br.Del()
+	err = br.Del(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -256,7 +258,7 @@ func Test_Bridge(t *testing.T) {
 
 func Test_Vxlan(t *testing.T) {
 
-	lo, err := GetLink("lo")
+	lo, err := GetLink(ctx, "lo")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -273,12 +275,12 @@ func Test_Vxlan(t *testing.T) {
 		},
 	}
 
-	err = vx.Add()
+	err = vx.Add(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	xv, err := GetLink("vtep47")
+	xv, err := GetLink(ctx, "vtep47")
 	if err != nil {
 		t.Error(err)
 	}
@@ -293,7 +295,7 @@ func Test_Vxlan(t *testing.T) {
 		}
 	}
 
-	err = vx.Del()
+	err = vx.Del(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}

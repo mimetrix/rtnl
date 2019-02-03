@@ -51,7 +51,7 @@ type Vxlan struct {
 }
 
 // Marshal turns a vxlan into a binary rtnetlink set of attributes.
-func (v *Vxlan) Marshal() ([]byte, error) {
+func (v *Vxlan) Marshal(ctx *Context) ([]byte, error) {
 
 	ae := netlink.NewAttributeEncoder()
 	ae.Do(unix.IFLA_LINKINFO, func() ([]byte, error) {
@@ -95,7 +95,7 @@ func (v *Vxlan) Marshal() ([]byte, error) {
 }
 
 // Unmarshal reads a vxlan from a binary set of attributes.
-func (v *Vxlan) Unmarshal(buf []byte) error {
+func (v *Vxlan) Unmarshal(ctx *Context, buf []byte) error {
 
 	ad, err := netlink.NewAttributeDecoder(buf)
 	if err != nil {
@@ -129,7 +129,7 @@ func (v *Vxlan) Unmarshal(buf []byte) error {
 }
 
 // Resolve handle attributes
-func (v *Vxlan) Resolve() error {
+func (v *Vxlan) Resolve(ctx *Context) error {
 
 	return nil
 

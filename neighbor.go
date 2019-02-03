@@ -192,9 +192,9 @@ func (n *NbrMsg) Unmarshal(bs []byte) error {
 
 // read the forwarding database (FDB), this essentially means reading all the
 // neighbors in the AF_BRIDGE family
-func readNeighbors(family uint8) ([]Neighbor, error) {
+func readNeighbors(ctx *Context, family uint8) ([]Neighbor, error) {
 
-	conn, err := netlink.Dial(unix.NETLINK_ROUTE, nil)
+	conn, err := netlink.Dial(unix.NETLINK_ROUTE, &netlink.Config{NetNS: ctx.Ns})
 	if err != nil {
 		log.WithError(err).Error("failed to dial netlink")
 		return nil, err
@@ -209,7 +209,7 @@ func readNeighbors(family uint8) ([]Neighbor, error) {
 	// we need to send netlink an NdMsg
 	var data []byte
 	if family == unix.AF_BRIDGE {
-		data, err = Link{Msg: unix.IfInfomsg{Family: family}}.Marshal()
+		data, err = Link{Msg: unix.IfInfomsg{Family: family}}.Marshal(ctx)
 	} else {
 		data, err = NbrMsg{Msg: NdMsg{Family: family}}.Marshal()
 		if err != nil {
@@ -266,19 +266,19 @@ func readNeighbors(family uint8) ([]Neighbor, error) {
 
 }
 
-func addNeighbors(ns []Neighbor) error {
+func addNeighbors(ctx *Context, ns []Neighbor) error {
 
-	return modifyNeighbors(ns, unix.RTM_NEWNEIGH)
-
-}
-
-func removeNeighbors(ns []Neighbor) error {
-
-	return modifyNeighbors(ns, unix.RTM_DELNEIGH)
+	return modifyNeighbors(ctx, ns, unix.RTM_NEWNEIGH)
 
 }
 
-func modifyNeighbors(ns []Neighbor, op uint16) error {
+func removeNeighbors(ctx *Context, ns []Neighbor) error {
+
+	return modifyNeighbors(ctx, ns, unix.RTM_DELNEIGH)
+
+}
+
+func modifyNeighbors(ctx *Context, ns []Neighbor, op uint16) error {
 
 	// prepare netlink messages
 	var messages []netlink.Message
@@ -343,6 +343,6 @@ func modifyNeighbors(ns []Neighbor, op uint16) error {
 	}
 
 	// send netlink messages
-	return netlinkUpdate(messages)
+	return netlinkUpdate(ctx, messages)
 
 }

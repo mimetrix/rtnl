@@ -216,22 +216,22 @@ func readRoutes() (map[string]Route, error) {
 
 }
 
-func addRoutes(rs []Route) error {
+func addRoutes(ctx *Context, rs []Route) error {
 
-	return modifyRoutes(rs, unix.RTM_NEWROUTE)
+	return modifyRoutes(ctx, rs, unix.RTM_NEWROUTE)
 
 }
 
-func removeRoutes(rs []Route) error {
+func removeRoutes(ctx *Context, rs []Route) error {
 
-	return modifyRoutes(rs, unix.RTM_DELROUTE)
+	return modifyRoutes(ctx, rs, unix.RTM_DELROUTE)
 
 }
 
 // modify a set of routes
 // op=RTM_NEWROUTE ---> add
 // op=RTM_DELROUTE ---> remove
-func modifyRoutes(rs []Route, op uint16) error {
+func modifyRoutes(ctx *Context, rs []Route, op uint16) error {
 
 	// prepare netlink messages
 	var messages []netlink.Message
@@ -296,6 +296,6 @@ func modifyRoutes(rs []Route, op uint16) error {
 	}
 
 	// send netlink messages
-	return netlinkUpdate(messages)
+	return netlinkUpdate(ctx, messages)
 
 }

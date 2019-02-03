@@ -21,7 +21,7 @@ type Veth struct {
 }
 
 // Marshal turns a veth into a binary rtnetlink set of attributes.
-func (v *Veth) Marshal() ([]byte, error) {
+func (v *Veth) Marshal(ctx *Context) ([]byte, error) {
 
 	ae := netlink.NewAttributeEncoder()
 	ae.Do(unix.IFLA_LINKINFO, func() ([]byte, error) {
@@ -66,7 +66,7 @@ func (v *Veth) Marshal() ([]byte, error) {
 }
 
 // Unmarshal reads a veth from a binary set of attributes.
-func (v *Veth) Unmarshal(buf []byte) error {
+func (v *Veth) Unmarshal(ctx *Context, buf []byte) error {
 
 	ad, err := netlink.NewAttributeDecoder(buf)
 	if err != nil {
@@ -95,7 +95,7 @@ func (v *Veth) Unmarshal(buf []byte) error {
 		}
 	}
 
-	return v.ResolvePeer()
+	return v.ResolvePeer(ctx)
 
 }
 
@@ -119,11 +119,11 @@ func (v *Veth) Satisfies(spec *Veth) bool {
 }
 
 // ResolvePeer fills in this veth's peer interface name from its index.
-func (v *Veth) ResolvePeer() error {
+func (v *Veth) ResolvePeer(ctx *Context) error {
 
 	spec := NewLink()
 	spec.Msg.Index = int32(v.PeerIfx)
-	result, err := ReadLinks(spec)
+	result, err := ReadLinks(ctx, spec)
 	if err != nil {
 		log.WithError(err).Error("read links failed")
 		return err
@@ -144,8 +144,8 @@ func (v *Veth) ResolvePeer() error {
 }
 
 // Reolve handle attributes
-func (v *Veth) Resolve() error {
+func (v *Veth) Resolve(ctx *Context) error {
 
-	return v.ResolvePeer()
+	return v.ResolvePeer(ctx)
 
 }

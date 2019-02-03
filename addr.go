@@ -166,7 +166,7 @@ func (a *Address) Unmarshal(buf []byte) error {
 // ReadAddrs reads a set of addresses according to the provided specification.
 // For example, if you specify the address family, only addresses from that
 // family will be returned. Some basic attribute filtering is also implemented.
-func ReadAddrs(spec *Address) ([]*Address, error) {
+func ReadAddrs(ctx *Context, spec *Address) ([]*Address, error) {
 
 	var result []*Address
 
@@ -189,7 +189,7 @@ func ReadAddrs(spec *Address) ([]*Address, error) {
 	}
 	m.Data = data
 
-	err = withNetlink(func(conn *netlink.Conn) error {
+	err = withNsNetlink(ctx.Ns, func(conn *netlink.Conn) error {
 
 		resp, err := conn.Execute(m)
 		if err != nil {
@@ -218,14 +218,14 @@ func ReadAddrs(spec *Address) ([]*Address, error) {
 }
 
 // AddAddr adds the specified address.
-func AddAddr(addr *Address) error {
+func AddAddr(ctx *Context, addr *Address) error {
 
-	return AddAddrs([]*Address{addr})
+	return AddAddrs(ctx, []*Address{addr})
 
 }
 
 // AddAddrs adds the specified addresses.
-func AddAddrs(addrs []*Address) error {
+func AddAddrs(ctx *Context, addrs []*Address) error {
 
 	var messages []netlink.Message
 
@@ -252,7 +252,7 @@ func AddAddrs(addrs []*Address) error {
 
 	}
 
-	return netlinkUpdate(messages)
+	return netlinkUpdate(ctx, messages)
 
 }
 
