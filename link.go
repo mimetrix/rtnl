@@ -427,16 +427,34 @@ func (l *Link) Absent() error {
 // Up brings up the link
 func (l *Link) Up() error {
 
-	l.Msg.Flags |= unix.IFF_UP
-	return l.Modify(unix.RTM_SETLINK)
+	err := l.Read()
+	if err != nil {
+		return nil
+	}
+
+	if l.Msg.Flags&unix.IFF_UP == 0 {
+		l.Msg.Flags |= unix.IFF_UP
+		return l.Modify(unix.RTM_SETLINK)
+	}
+
+	return nil
 
 }
 
 // Up down brings down the link
 func (l *Link) Down() error {
 
-	l.Msg.Flags &= ^uint32(unix.IFF_UP)
-	return l.Modify(unix.RTM_SETLINK)
+	err := l.Read()
+	if err != nil {
+		return nil
+	}
+
+	if l.Msg.Flags&unix.IFF_UP != 0 {
+		l.Msg.Flags &= ^uint32(unix.IFF_UP)
+		return l.Modify(unix.RTM_SETLINK)
+	}
+
+	return nil
 
 }
 
