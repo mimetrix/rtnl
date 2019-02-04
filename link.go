@@ -55,6 +55,8 @@ type LinkInfo struct {
 	// network namespace file descriptor
 	Ns uint32
 
+	LinkNS uint32
+
 	// bridge master
 	Master uint32
 
@@ -189,6 +191,9 @@ func (l *Link) Unmarshal(ctx *Context, bs []byte) error {
 		case unix.IFLA_NET_NS_FD:
 			l.Info.Ns = ad.Uint32()
 
+		case unix.IFLA_LINK_NETNSID:
+			l.Info.LinkNS = ad.Uint32()
+
 		}
 	}
 
@@ -295,7 +300,7 @@ func (l *Link) Read(ctx *Context) error {
 	*l = *links[0]
 
 	for _, a := range l.Attributes() {
-		err := a.Resolve(ctx)
+		err := a.Resolve(&Context{Ns: int(l.Info.LinkNS)})
 		if err != nil {
 			return err
 		}

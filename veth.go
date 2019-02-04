@@ -18,6 +18,7 @@ const (
 type Veth struct {
 	Peer    string
 	PeerIfx uint32
+	PeerNS  uint32
 }
 
 // Marshal turns a veth into a binary rtnetlink set of attributes.
@@ -89,13 +90,18 @@ func (v *Veth) Unmarshal(ctx *Context, buf []byte) error {
 				case unix.IFLA_IFNAME:
 					v.Peer = ad1.String()
 
+				case unix.IFLA_LINK_NETNSID:
+					v.PeerNS = ad.Uint32()
+					log.Printf("veth link netnsid %d", v.PeerNS)
+
 				}
 			}
 
 		}
 	}
 
-	return v.ResolvePeer(ctx)
+	//return v.ResolvePeer(ctx)
+	return nil
 
 }
 
@@ -121,11 +127,17 @@ func (v *Veth) Satisfies(spec *Veth) bool {
 // ResolvePeer fills in this veth's peer interface name from its index.
 func (v *Veth) ResolvePeer(ctx *Context) error {
 
+	fields := log.Fields{
+		"ifx":    v.PeerIfx,
+		"peerns": v.PeerNS,
+		"ns":     ctx.Ns,
+	}
+
 	spec := NewLink()
 	spec.Msg.Index = int32(v.PeerIfx)
 	result, err := ReadLinks(ctx, spec)
 	if err != nil {
-		log.WithError(err).Error("read links failed")
+		log.WithFields(fields).WithError(err).Error("read peer failed")
 		return err
 	}
 
@@ -145,6 +157,9 @@ func (v *Veth) ResolvePeer(ctx *Context) error {
 
 // Reolve handle attributes
 func (v *Veth) Resolve(ctx *Context) error {
+
+	//TODO(ry): broken across namespaces
+	return nil
 
 	return v.ResolvePeer(ctx)
 

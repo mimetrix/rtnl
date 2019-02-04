@@ -31,6 +31,7 @@ func Test_AddVeth(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	ve.Info.Veth.ResolvePeer(ctx)
 	if ve.Info.Veth.Peer != "vethB" {
 		t.Fatal("peer lost")
 	}
@@ -64,6 +65,7 @@ func Test_AddVeth(t *testing.T) {
 	// read back and ensure peer equality
 
 	lnk, err := GetLink(ctx, "vethA")
+	lnk.Info.Veth.ResolvePeer(ctx)
 	if ve.Info.Veth.Peer != lnk.Info.Veth.Peer {
 		t.Fatalf("peer of read link not correct %v != %v",
 			ve.Info.Veth.Peer, lnk.Info.Veth.Peer,
