@@ -63,7 +63,7 @@ func (v *Vxlan) Marshal(ctx *Context) ([]byte, error) {
 			ae2 := netlink.NewAttributeEncoder()
 			ae2.Uint32(IFLA_VXLAN_ID, v.Vni)
 			ae2.Uint8(IFLA_VXLAN_LEARNING, v.Learning)
-			ae2.Uint16(IFLA_VXLAN_PORT, v.DstPort)
+			ae2.Uint16(IFLA_VXLAN_PORT, htons(v.DstPort))
 
 			if v.Local != nil {
 				local := v.Local.To4()
@@ -113,7 +113,7 @@ func (v *Vxlan) Unmarshal(ctx *Context, buf []byte) error {
 			v.Learning = ad.Uint8()
 
 		case IFLA_VXLAN_PORT:
-			v.DstPort = ad.Uint16()
+			v.DstPort = ntohs(ad.Uint16())
 
 		case IFLA_VXLAN_LOCAL:
 			v.Local = net.IP(ad.Bytes())
