@@ -3,6 +3,7 @@ package rtnl
 import (
 	"encoding/binary"
 	"fmt"
+	"net"
 
 	"github.com/mdlayher/netlink"
 	"github.com/mdlayher/netlink/nlenc"
@@ -50,11 +51,13 @@ func NewLink() *Link {
 type LinkInfo struct {
 	Name string
 
-	// The following are optional link properties and are null if not present
+	// layer 2 address
+	Address net.HardwareAddr
 
 	// network namespace file descriptor
 	Ns uint32
 
+	// the network namespace the link is in
 	LinkNS uint32
 
 	// bridge master
@@ -107,6 +110,9 @@ func (l Link) Marshal(ctx *Context) ([]byte, error) {
 	if l.Info != nil && l.Info.Ns != 0 {
 		ae.Uint32(unix.IFLA_NET_NS_FD, l.Info.Ns)
 	}
+	if l.Info != nil && l.Info.Address != nil {
+		ae.Bytes(unix.IFLA_ADDRESS, l.Info.Address)
+	}
 	attrs, err := ae.Encode()
 	if err != nil {
 		return nil, err
@@ -158,6 +164,9 @@ func (l *Link) Unmarshal(ctx *Context, bs []byte) error {
 
 		case unix.IFLA_MASTER:
 			l.Info.Master = ad.Uint32()
+
+		case unix.IFLA_ADDRESS:
+			l.Info.Address = net.HardwareAddr(ad.Bytes())
 
 		case unix.IFLA_LINKINFO:
 

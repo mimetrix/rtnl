@@ -28,6 +28,7 @@ func Test_AddVeth(t *testing.T) {
 		},
 	}
 	err := ve.Add(ctx)
+	t.Logf("%+v", ve.Info)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,10 +66,17 @@ func Test_AddVeth(t *testing.T) {
 	// read back and ensure peer equality
 
 	lnk, err := GetLink(ctx, "vethA")
+	t.Logf("%+v", lnk.Info)
 	lnk.Info.Veth.ResolvePeer(ctx)
 	if ve.Info.Veth.Peer != lnk.Info.Veth.Peer {
 		t.Fatalf("peer of read link not correct %v != %v",
 			ve.Info.Veth.Peer, lnk.Info.Veth.Peer,
+		)
+	}
+	if ve.Info.Address.String() != lnk.Info.Address.String() {
+		t.Fatalf("L2 address mismatch %s != %s",
+			ve.Info.Address.String(),
+			lnk.Info.Address.String(),
 		)
 	}
 	if err != nil {
