@@ -462,6 +462,7 @@ func (l *Link) Up(ctx *Context) error {
 	}
 
 	if l.Msg.Flags&unix.IFF_UP == 0 {
+		l.Msg.Change |= unix.IFF_UP
 		l.Msg.Flags |= unix.IFF_UP
 		return l.Modify(ctx, unix.RTM_SETLINK)
 	}
@@ -479,6 +480,7 @@ func (l *Link) Down(ctx *Context) error {
 	}
 
 	if l.Msg.Flags&unix.IFF_UP != 0 {
+		l.Msg.Change |= unix.IFF_UP
 		l.Msg.Flags &= ^uint32(unix.IFF_UP)
 		return l.Modify(ctx, unix.RTM_SETLINK)
 	}

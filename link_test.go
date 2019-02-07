@@ -233,13 +233,13 @@ func Test_Bridge(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = br.Up(ctx)
+	br.Info.Promisc = true
+	err = br.Set(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	br.Info.Promisc = true
-	err = br.Set(ctx)
+	err = br.Up(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -280,10 +280,12 @@ func Test_Bridge(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = br.Del(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	/*
+		err = br.Del(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+	*/
 
 }
 
