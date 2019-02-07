@@ -244,6 +244,16 @@ func Test_Bridge(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	brr, err := GetLink(ctx, "br47")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !brr.Info.Promisc {
+		br.Del(ctx)
+		t.Fatal("promisc readback failed")
+	}
+
 	addr, _ := ParseAddr("1.2.3.4/24")
 	err = br.AddAddr(ctx, addr)
 	if err != nil {

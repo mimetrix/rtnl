@@ -159,6 +159,10 @@ func (l *Link) Unmarshal(ctx *Context, bs []byte) error {
 	l.Msg.Flags = flags
 	l.Msg.Change = change
 
+	if (l.Msg.Flags & unix.IFF_PROMISC) != 0 {
+		l.Info.Promisc = true
+	}
+
 	ad, err := netlink.NewAttributeDecoder(bs[16:])
 	if err != nil {
 		log.WithError(err).Error("error creating decoder")
