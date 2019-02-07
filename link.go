@@ -54,6 +54,8 @@ type LinkInfo struct {
 	// layer 2 address
 	Address net.HardwareAddr
 
+	Promisc bool
+
 	// network namespace file descriptor
 	Ns uint32
 
@@ -83,6 +85,15 @@ func (l Link) Marshal(ctx *Context) ([]byte, error) {
 
 	index := make([]byte, 4)
 	nlenc.PutInt32(index, l.Msg.Index)
+
+	// promisc
+	if l.Info != nil && l.Info.Promisc {
+		l.Msg.Change |= unix.IFF_PROMISC
+		l.Msg.Flags |= unix.IFF_PROMISC
+	} else {
+		l.Msg.Change |= unix.IFF_PROMISC
+		l.Msg.Flags &= ^uint32(unix.IFF_PROMISC)
+	}
 
 	flags := make([]byte, 4)
 	binary.LittleEndian.PutUint32(flags, l.Msg.Flags)
