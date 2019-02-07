@@ -110,7 +110,7 @@ func (l Link) Marshal(ctx *Context) ([]byte, error) {
 	if l.Info != nil && l.Info.Ns != 0 {
 		ae.Uint32(unix.IFLA_NET_NS_FD, l.Info.Ns)
 	}
-	if l.Info != nil && l.Info.Address != nil {
+	if l.Info != nil && l.Info.Address != nil && !isZeroMac(l.Info.Address) {
 		ae.Bytes(unix.IFLA_ADDRESS, l.Info.Address)
 	}
 	attrs, err := ae.Encode()
