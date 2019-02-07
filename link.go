@@ -101,36 +101,40 @@ func (l Link) Marshal(ctx *Context) ([]byte, error) {
 		change[0], change[1], change[2], change[3],
 	}
 
-	ae := netlink.NewAttributeEncoder()
+	if l.Msg.Change == 0 {
+		ae := netlink.NewAttributeEncoder()
 
-	if l.Info != nil && l.Info.Name != "" {
-		ae.String(unix.IFLA_IFNAME, l.Info.Name)
-	}
-	if l.Info != nil && l.Info.Master != 0 {
-		ae.Uint32(unix.IFLA_MASTER, l.Info.Master)
-	}
-	if l.Info != nil && l.Info.Ns != 0 {
-		ae.Uint32(unix.IFLA_NET_NS_FD, l.Info.Ns)
-	}
-	if l.Info != nil && l.Info.Address != nil && !isZeroMac(l.Info.Address) {
-		ae.Bytes(unix.IFLA_ADDRESS, l.Info.Address)
-	}
-	attrs, err := ae.Encode()
-	if err != nil {
-		return nil, err
-	}
-
-	for _, a := range l.Attributes() {
-
-		as, err := a.Marshal(ctx)
+		if l.Info != nil && l.Info.Name != "" {
+			ae.String(unix.IFLA_IFNAME, l.Info.Name)
+		}
+		if l.Info != nil && l.Info.Master != 0 {
+			ae.Uint32(unix.IFLA_MASTER, l.Info.Master)
+		}
+		if l.Info != nil && l.Info.Ns != 0 {
+			ae.Uint32(unix.IFLA_NET_NS_FD, l.Info.Ns)
+		}
+		if l.Info != nil && l.Info.Address != nil && !isZeroMac(l.Info.Address) {
+			ae.Bytes(unix.IFLA_ADDRESS, l.Info.Address)
+		}
+		attrs, err := ae.Encode()
 		if err != nil {
 			return nil, err
 		}
-		attrs = append(attrs, as...)
 
+		for _, a := range l.Attributes() {
+
+			as, err := a.Marshal(ctx)
+			if err != nil {
+				return nil, err
+			}
+			attrs = append(attrs, as...)
+
+		}
+
+		return append(msg, attrs...), nil
 	}
 
-	return append(msg, attrs...), nil
+	return msg, nil
 
 }
 
