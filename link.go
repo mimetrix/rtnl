@@ -86,15 +86,6 @@ func (l Link) Marshal(ctx *Context) ([]byte, error) {
 	index := make([]byte, 4)
 	nlenc.PutInt32(index, l.Msg.Index)
 
-	// promisc
-	if l.Info != nil && l.Info.Promisc {
-		l.Msg.Change |= unix.IFF_PROMISC
-		l.Msg.Flags |= unix.IFF_PROMISC
-	} else {
-		l.Msg.Change |= unix.IFF_PROMISC
-		l.Msg.Flags &= ^uint32(unix.IFF_PROMISC)
-	}
-
 	flags := make([]byte, 4)
 	binary.LittleEndian.PutUint32(flags, l.Msg.Flags)
 
@@ -486,6 +477,21 @@ func (l *Link) Down(ctx *Context) error {
 	}
 
 	return nil
+
+}
+
+func (l *Link) Promisc(ctx *Context, v bool) error {
+
+	// promisc
+	if v {
+		l.Msg.Change |= unix.IFF_PROMISC
+		l.Msg.Flags |= unix.IFF_PROMISC
+	} else {
+		l.Msg.Change |= unix.IFF_PROMISC
+		l.Msg.Flags &= ^uint32(unix.IFF_PROMISC)
+	}
+
+	return l.Modify(ctx, unix.RTM_SETLINK)
 
 }
 
