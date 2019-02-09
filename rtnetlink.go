@@ -12,7 +12,32 @@ import (
 )
 
 type Context struct {
-	Ns int
+	f *os.File
+}
+
+func (c *Context) Fd() int {
+	if c.f == nil {
+		return 0
+	}
+	return int(c.f.Fd())
+}
+func (c *Context) Close() error {
+	if c.f == nil {
+		return nil
+	}
+	return c.f.Close()
+}
+
+func OpenContext(namespace string) (*Context, error) {
+
+	f, err := os.Open(fmt.Sprintf("/var/run/netns/%s", namespace))
+	if err != nil {
+		return nil, err
+	}
+	ctx := &Context{f}
+
+	return ctx, nil
+
 }
 
 // Attributes is an interface that is used on all types that can be marshaled
@@ -66,7 +91,7 @@ func withNsNetlink(ns int, f func(*netlink.Conn) error) error {
 }
 
 func netlinkUpdate(ctx *Context, messages []netlink.Message) error {
-	return withNsNetlink(ctx.Ns, func(c *netlink.Conn) error {
+	return withNsNetlink(ctx.Fd(), func(c *netlink.Conn) error {
 
 		for _, m := range messages {
 

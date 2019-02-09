@@ -194,7 +194,7 @@ func (n *NbrMsg) Unmarshal(bs []byte) error {
 // neighbors in the AF_BRIDGE family
 func readNeighbors(ctx *Context, family uint8) ([]Neighbor, error) {
 
-	conn, err := netlink.Dial(unix.NETLINK_ROUTE, &netlink.Config{NetNS: ctx.Ns})
+	conn, err := netlink.Dial(unix.NETLINK_ROUTE, &netlink.Config{NetNS: ctx.Fd()})
 	if err != nil {
 		log.WithError(err).Error("failed to dial netlink")
 		return nil, err

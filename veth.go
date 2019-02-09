@@ -130,7 +130,7 @@ func (v *Veth) ResolvePeer(ctx *Context) error {
 	fields := log.Fields{
 		"ifx":    v.PeerIfx,
 		"peerns": v.PeerNS,
-		"ns":     ctx.Ns,
+		"ns":     ctx.Fd(),
 	}
 
 	spec := NewLink()

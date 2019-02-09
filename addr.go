@@ -189,7 +189,7 @@ func ReadAddrs(ctx *Context, spec *Address) ([]*Address, error) {
 	}
 	m.Data = data
 
-	err = withNsNetlink(ctx.Ns, func(conn *netlink.Conn) error {
+	err = withNsNetlink(ctx.Fd(), func(conn *netlink.Conn) error {
 
 		resp, err := conn.Execute(m)
 		if err != nil {

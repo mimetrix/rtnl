@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-var ctx = &Context{Ns: 0}
+var ctx = &Context{}
 
 type IProute2Link struct {
 	Link   string

@@ -266,7 +266,7 @@ func ReadLinks(ctx *Context, spec *Link) ([]*Link, error) {
 	}
 	m.Data = data
 
-	err = withNsNetlink(ctx.Ns, func(conn *netlink.Conn) error {
+	err = withNsNetlink(ctx.Fd(), func(conn *netlink.Conn) error {
 
 		resp, err := conn.Execute(m)
 		if err != nil {
@@ -319,7 +319,7 @@ func (l *Link) Read(ctx *Context) error {
 	*l = *links[0]
 
 	for _, a := range l.Attributes() {
-		err := a.Resolve(&Context{Ns: int(l.Info.LinkNS)})
+		err := a.Resolve(ctx)
 		if err != nil {
 			return err
 		}
