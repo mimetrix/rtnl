@@ -28,6 +28,7 @@ func (c *Context) Close() error {
 	return c.f.Close()
 }
 
+// OpenContext creates a context in the specified namespace
 func OpenContext(namespace string) (*Context, error) {
 
 	f, err := os.Open(fmt.Sprintf("/var/run/netns/%s", namespace))
@@ -38,6 +39,18 @@ func OpenContext(namespace string) (*Context, error) {
 
 	return ctx, nil
 
+}
+
+// OpenDefaultContext creates a context in the default namespace
+func OpenDefaultContext() (*Context, error) {
+
+	f, err := os.Open("/proc/1/ns/net")
+	if err != nil {
+		return nil, err
+	}
+	ctx := &Context{f}
+
+	return ctx, nil
 }
 
 // Attributes is an interface that is used on all types that can be marshaled
