@@ -81,26 +81,28 @@ func (a Address) Marshal() ([]byte, error) {
 
 	ae := netlink.NewAttributeEncoder()
 
-	if a.Info.Address != nil {
+	if a.Info != nil {
+		if a.Info.Address != nil {
 
-		ae.Bytes(unix.IFA_ADDRESS, a.Info.Address.IP)
+			ae.Bytes(unix.IFA_ADDRESS, a.Info.Address.IP)
 
-		if a.Info.Local == nil {
-			ae.Bytes(unix.IFA_LOCAL, a.Info.Address.IP)
+			if a.Info.Local == nil {
+				ae.Bytes(unix.IFA_LOCAL, a.Info.Address.IP)
+			}
+
 		}
-
-	}
-	if a.Info.Local != nil {
-		ae.String(unix.IFA_LOCAL, a.Info.Local.String())
-	}
-	if a.Info.Label != "" {
-		ae.String(unix.IFA_LABEL, a.Info.Label)
-	}
-	if a.Info.Broadcast != nil {
-		ae.String(unix.IFA_BROADCAST, a.Info.Broadcast.String())
-	}
-	if a.Info.Anycast != nil {
-		ae.String(unix.IFA_ANYCAST, a.Info.Anycast.String())
+		if a.Info.Local != nil {
+			ae.String(unix.IFA_LOCAL, a.Info.Local.String())
+		}
+		if a.Info.Label != "" {
+			ae.String(unix.IFA_LABEL, a.Info.Label)
+		}
+		if a.Info.Broadcast != nil {
+			ae.String(unix.IFA_BROADCAST, a.Info.Broadcast.String())
+		}
+		if a.Info.Anycast != nil {
+			ae.String(unix.IFA_ANYCAST, a.Info.Anycast.String())
+		}
 	}
 
 	attrs, err := ae.Encode()
@@ -125,6 +127,10 @@ func (a *Address) Unmarshal(buf []byte) error {
 	a.Msg.Scope = buf[3]
 	a.Msg.Index = index
 
+	if a.Info == nil {
+		a.Info = &AddrInfo{}
+	}
+
 	ad, err := netlink.NewAttributeDecoder(buf[8:])
 	if err != nil {
 		log.WithError(err).Error("error creating address decoder")
@@ -135,14 +141,15 @@ func (a *Address) Unmarshal(buf []byte) error {
 		switch ad.Type() {
 
 		case unix.IFA_ADDRESS:
-			_, ipnet, err := net.ParseCIDR(ad.String())
-			if err != nil {
-				return err
+			a.Info.Address = &net.IPNet{
+				IP: net.IP(ad.Bytes()),
 			}
-			if ipnet == nil {
-				continue
+			switch a.Msg.Family {
+			case unix.AF_INET:
+				a.Info.Address.Mask = net.CIDRMask(int(a.Msg.Prefixlen), 32)
+			case unix.AF_INET6:
+				a.Info.Address.Mask = net.CIDRMask(int(a.Msg.Prefixlen), 128)
 			}
-			a.Info.Address = ipnet
 
 		case unix.IFA_LOCAL:
 			a.Info.Local = net.ParseIP(ad.String())
@@ -203,6 +210,10 @@ func ReadAddrs(ctx *Context, spec *Address) ([]*Address, error) {
 			if err != nil {
 				log.WithError(err).Error("error reading address")
 				return err
+			}
+
+			if spec.Msg.Index != 0 && spec.Msg.Index != a.Msg.Index {
+				continue
 			}
 
 			result = append(result, a)

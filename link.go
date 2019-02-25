@@ -22,9 +22,13 @@ type LinkType uint32
 
 const (
 	UnspecLinkType LinkType = iota
+	LoopbackType
 	PhysicalType
 	VxlanType
 	VethType
+	BridgeType
+	TapType
+	TunType
 )
 
 // interface link address attribute types
@@ -49,6 +53,7 @@ func NewLink() *Link {
 
 // LinkInfo holds link attribute data
 type LinkInfo struct {
+	// Name of the link
 	Name string
 
 	// layer 2 address
@@ -65,6 +70,15 @@ type LinkInfo struct {
 	// bridge master
 	Master uint32
 
+	// untagged vlan id (for membership in vlan-aware bridges)
+	Untagged uint16
+
+	// vlan tags (for membership in vlan-aware bridges)
+	Tagged []uint16
+
+	// loopback properties
+	Loopback *Loopback
+
 	// veth properties
 	Veth *Veth
 
@@ -73,6 +87,12 @@ type LinkInfo struct {
 
 	// bridge properties
 	Bridge *Bridge
+
+	// tap properties
+	Tap *Tap
+
+	// tun properties
+	Tun *Tun
 }
 
 // Methods ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -104,17 +124,22 @@ func (l Link) Marshal(ctx *Context) ([]byte, error) {
 	if l.Msg.Change == 0 {
 		ae := netlink.NewAttributeEncoder()
 
-		if l.Info != nil && l.Info.Name != "" {
-			ae.String(unix.IFLA_IFNAME, l.Info.Name)
-		}
-		if l.Info != nil && l.Info.Master != 0 {
-			ae.Uint32(unix.IFLA_MASTER, l.Info.Master)
-		}
-		if l.Info != nil && l.Info.Ns != 0 {
-			ae.Uint32(unix.IFLA_NET_NS_FD, l.Info.Ns)
-		}
-		if l.Info != nil && l.Info.Address != nil && !isZeroMac(l.Info.Address) {
-			ae.Bytes(unix.IFLA_ADDRESS, l.Info.Address)
+		if l.Info != nil {
+			if l.Info.Name != "" {
+				ae.String(unix.IFLA_IFNAME, l.Info.Name)
+			}
+			if l.Info.Master != 0 {
+				ae.Uint32(unix.IFLA_MASTER, l.Info.Master)
+			}
+			if l.Info.Ns != 0 {
+				ae.Uint32(unix.IFLA_NET_NS_FD, l.Info.Ns)
+			}
+			if l.Info.Address != nil && !isZeroMac(l.Info.Address) {
+				ae.Bytes(unix.IFLA_ADDRESS, l.Info.Address)
+			}
+			if l.Msg.Family == unix.AF_BRIDGE {
+				ae.Uint32(unix.IFLA_EXT_MASK, 2)
+			}
 		}
 		attrs, err := ae.Encode()
 		if err != nil {
@@ -156,6 +181,10 @@ func (l *Link) Unmarshal(ctx *Context, bs []byte) error {
 
 	if (l.Msg.Flags & unix.IFF_PROMISC) != 0 {
 		l.Info.Promisc = true
+	}
+
+	if (l.Msg.Flags & unix.IFF_LOOPBACK) != 0 {
+		l.Info.Loopback = &Loopback{}
 	}
 
 	ad, err := netlink.NewAttributeDecoder(bs[16:])
@@ -204,6 +233,27 @@ func (l *Link) Unmarshal(ctx *Context, bs []byte) error {
 				}
 			}
 
+		case unix.IFLA_AF_SPEC:
+
+			nad, err := netlink.NewAttributeDecoder(ad.Bytes())
+			if err != nil {
+				log.WithError(err).Warning("failed to create bridge spec decoder")
+				continue
+			}
+			for nad.Next() {
+				switch nad.Type() {
+
+				case IFLA_BRIDGE_VLAN_INFO:
+					bs := nad.Bytes()
+					flags := nlenc.Uint16(bs[:2])
+					vid := nlenc.Uint16(bs[2:4])
+
+					if (flags & BRIDGE_VLAN_INFO_UNTAGGED) != 0 {
+						l.Info.Untagged = vid
+					}
+				}
+			}
+
 		case unix.IFLA_LINK:
 			link = ad.Uint32()
 
@@ -247,12 +297,18 @@ func ReadLinks(ctx *Context, spec *Link) ([]*Link, error) {
 	m := netlink.Message{
 		Header: netlink.Header{
 			Type:  unix.RTM_GETLINK,
-			Flags: netlink.HeaderFlagsRequest | netlink.HeaderFlagsAtomic,
+			Flags: netlink.HeaderFlagsRequest,
 		},
 	}
 
 	if spec == nil {
 		spec = &Link{}
+	}
+
+	if spec.Msg.Family == unix.AF_BRIDGE {
+		m.Header.Flags |= netlink.HeaderFlagsDump
+	} else {
+		m.Header.Flags |= netlink.HeaderFlagsAtomic
 	}
 
 	if spec.Msg.Index == 0 {
@@ -298,6 +354,7 @@ func ReadLinks(ctx *Context, spec *Link) ([]*Link, error) {
 func (l *Link) Read(ctx *Context) error {
 
 	spec := NewLink()
+	spec.Msg.Family = l.Msg.Family
 	spec.Msg.Index = l.Msg.Index
 
 	if l.Info != nil {
@@ -316,7 +373,12 @@ func (l *Link) Read(ctx *Context) error {
 		return fmt.Errorf("not unique")
 	}
 
-	*l = *links[0]
+	if l.Msg.Family == unix.AF_BRIDGE {
+		l.Info.Untagged = links[0].Info.Untagged
+		l.Info.Tagged = links[0].Info.Tagged
+	} else {
+		*l = *links[0]
+	}
 
 	for _, a := range l.Attributes() {
 		err := a.Resolve(ctx)
@@ -364,9 +426,50 @@ func (l *Link) ApplyType(typ string) Attributes {
 		l.Info.Veth = &Veth{}
 		return l.Info.Veth
 
+	case "bridge":
+		l.Info.Bridge = &Bridge{}
+		return l.Info.Bridge
+
+	case "tap":
+		l.Info.Tap = &Tap{}
+		return l.Info.Tap
+
+	case "tun":
+		l.Info.Tun = &Tun{}
+		return l.Info.Tun
+
 	}
 
+	log.Warnf("unknown type %s", typ)
+
 	return nil
+
+}
+
+func (li *LinkInfo) Type() LinkType {
+
+	if li.Loopback != nil {
+		return LoopbackType
+	}
+	if li.Veth != nil {
+		return VethType
+	}
+	if li.Vxlan != nil {
+		return VxlanType
+	}
+	if li.Bridge != nil {
+		return BridgeType
+	}
+	if li.Tap != nil {
+		return TapType
+	}
+	if li.Tun != nil {
+		return TunType
+	}
+
+	//TODO Is this a reasonable default? Given the logic of how types are
+	//ascertained i think its at least decent.
+	return PhysicalType
 
 }
 
@@ -531,6 +634,60 @@ func (l *Link) Modify(ctx *Context, op uint16) error {
 
 }
 
+func (l *Link) SetUntagged(ctx *Context, unset bool) error {
+
+	l.Msg.Family = unix.AF_BRIDGE
+	msg := IfInfomsgBytes(l.Msg)
+
+	ae := netlink.NewAttributeEncoder()
+
+	if l.Info == nil {
+		return fmt.Errorf("no link info")
+	}
+	if l.Info.Untagged != 0 {
+		ae.Do(unix.IFLA_AF_SPEC, func() ([]byte, error) {
+
+			ae1 := netlink.NewAttributeEncoder()
+			ae1.Do(IFLA_BRIDGE_VLAN_INFO, func() ([]byte, error) {
+
+				flags := nlenc.Uint16Bytes(BRIDGE_VLAN_INFO_UNTAGGED)
+				vid := nlenc.Uint16Bytes(l.Info.Untagged)
+				return append(flags, vid...), nil
+
+			})
+			return ae1.Encode()
+
+		})
+	}
+
+	attrs, err := ae.Encode()
+	if err != nil {
+		return err
+	}
+
+	data := append(msg, attrs...)
+
+	flags := netlink.HeaderFlagsRequest |
+		netlink.HeaderFlagsAcknowledge |
+		netlink.HeaderFlagsExcl
+
+	op := unix.RTM_SETLINK
+	if unset {
+		op = unix.RTM_DELLINK
+	}
+
+	m := netlink.Message{
+		Header: netlink.Header{
+			Type:  netlink.HeaderType(op),
+			Flags: flags,
+		},
+		Data: data,
+	}
+
+	return netlinkUpdate(ctx, []netlink.Message{m})
+
+}
+
 func (l *Link) AddAddr(ctx *Context, addr *Address) error {
 
 	addr.Msg.Index = uint32(l.Msg.Index)
@@ -545,14 +702,89 @@ func (l *Link) Satisfies(spec *Link) bool {
 		return true
 	}
 
-	if l.Info != nil && spec.Info != nil && !stringSat(l.Info.Name, spec.Info.Name) {
+	if l.Info != nil &&
+		spec.Info != nil &&
+		!stringSat(l.Info.Name, spec.Info.Name) {
 		return false
 	}
 
-	if l.Info != nil && spec.Info != nil && !l.Info.Veth.Satisfies(spec.Info.Veth) {
+	if l.Info != nil &&
+		spec.Info != nil &&
+		!l.Info.Veth.Satisfies(spec.Info.Veth) {
 		return false
 	}
 
 	return true
+
+}
+
+func (lt LinkType) String() string {
+
+	switch lt {
+	case PhysicalType:
+		return "physical"
+	case LoopbackType:
+		return "loopback"
+	case VxlanType:
+		return "vxlan"
+	case VethType:
+		return "veth"
+	case BridgeType:
+		return "bridge"
+	case TapType:
+		return "tap"
+	case TunType:
+		return "tun"
+	default:
+		return "unspec"
+	}
+
+}
+
+func ParseLinkType(str string) LinkType {
+
+	switch str {
+	case "physical":
+		return PhysicalType
+	case "loopback":
+		return LoopbackType
+	case "vxlan":
+		return VxlanType
+	case "veth":
+		return VethType
+	case "bridge":
+		return BridgeType
+	case "tap":
+		return TapType
+	case "tun":
+		return TunType
+	default:
+		return UnspecLinkType
+	}
+
+}
+
+func IfInfomsgBytes(msg unix.IfInfomsg) []byte {
+
+	typ := make([]byte, 2)
+	binary.LittleEndian.PutUint16(typ, msg.Type)
+
+	index := make([]byte, 4)
+	nlenc.PutInt32(index, msg.Index)
+
+	flags := make([]byte, 4)
+	binary.LittleEndian.PutUint32(flags, msg.Flags)
+
+	change := make([]byte, 4)
+	binary.LittleEndian.PutUint32(change, msg.Change)
+
+	return []byte{
+		msg.Family,
+		0, //padding per include/uapi/linux/rtnetlink.h
+		typ[0], typ[1],
+		index[0], index[1], index[2], index[3],
+		flags[0], flags[1], flags[2], flags[3],
+		change[0], change[1], change[2], change[3],
+	}
 
 }
