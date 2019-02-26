@@ -642,13 +642,13 @@ func (l *Link) Modify(ctx *Context, op uint16) error {
 
 func (l *Link) SetUntagged(ctx *Context, vid uint16, unset bool, pvid bool, self bool) error {
 
-	return l.SetVlan(ctx, vid, true, unset, pvid, self)
+	return l.SetVlan(ctx, vid, unset, true, pvid, self)
 
 }
 
 func (l *Link) SetTagged(ctx *Context, vid uint16, unset bool, pvid bool, self bool) error {
 
-	return l.SetVlan(ctx, vid, false, unset, pvid, self)
+	return l.SetVlan(ctx, vid, unset, false, pvid, self)
 
 }
 
