@@ -13,6 +13,8 @@ var tw = tabwriter.NewWriter(os.Stdout, 0, 0, 4, ' ', 0)
 var white = color.New(color.FgWhite).SprintFunc()
 var green = color.New(color.FgGreen).SprintFunc()
 var blue = color.New(color.FgBlue).SprintFunc()
+var cyan = color.New(color.FgCyan).SprintFunc()
+var red = color.New(color.FgRed).SprintFunc()
 
 func main() {
 

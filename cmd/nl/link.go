@@ -36,6 +36,24 @@ func linkCommands(root *cobra.Command) {
 	list.Flags().StringVarP(&bridge, "bridge", "b", "", "filter on bridge")
 	link.AddCommand(list)
 
+	// up
+	up := &cobra.Command{
+		Use:   "up <name>",
+		Short: "bring a link up",
+		Args:  cobra.ExactArgs(1),
+		Run:   func(cmd *cobra.Command, args []string) { doUp(args[0]) },
+	}
+	link.AddCommand(up)
+
+	// down
+	down := &cobra.Command{
+		Use:   "down <name>",
+		Short: "bring a link down",
+		Args:  cobra.ExactArgs(1),
+		Run:   func(cmd *cobra.Command, args []string) { doDown(args[0]) },
+	}
+	link.AddCommand(down)
+
 	// delete
 	delete := &cobra.Command{
 		Use:   "delete <name>",
@@ -124,6 +142,9 @@ func linkCommands(root *cobra.Command) {
 	}
 	link.AddCommand(set)
 
+	var (
+		pvid bool
+	)
 	untaggedCmd := &cobra.Command{
 		Use:   "untagged <name> <vid>",
 		Short: "set link untagged bridge vlan",
@@ -133,9 +154,10 @@ func linkCommands(root *cobra.Command) {
 			if err != nil {
 				log.Fatal(err)
 			}
-			doUntagged(args[0], vid, false)
+			doUntagged(args[0], vid, false, pvid)
 		},
 	}
+	untaggedCmd.Flags().BoolVarP(&pvid, "access", "a", false, "access mode")
 	set.AddCommand(untaggedCmd)
 
 	// unset
@@ -154,7 +176,7 @@ func linkCommands(root *cobra.Command) {
 			if err != nil {
 				log.Fatal(err)
 			}
-			doUntagged(args[0], vid, true)
+			doUntagged(args[0], vid, true, false)
 		},
 	}
 	unset.AddCommand(noUntaggedCmd)
@@ -188,7 +210,7 @@ func doList(typ, bridge string) {
 	}
 
 	fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n",
-		"name",
+		white("name"),
 		white("type"), //get colored offset correct for tab writer
 		"mac",
 		"master",
@@ -223,6 +245,46 @@ func doDelete(name string) {
 	}
 
 	err = lnk.Del(ctx)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+}
+
+func doUp(name string) {
+
+	ctx, err := rtnl.OpenDefaultContext()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer ctx.Close()
+
+	lnk, err := rtnl.GetLink(ctx, name)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = lnk.Up(ctx)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+}
+
+func doDown(name string) {
+
+	ctx, err := rtnl.OpenDefaultContext()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer ctx.Close()
+
+	lnk, err := rtnl.GetLink(ctx, name)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = lnk.Down(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -329,7 +391,7 @@ func doAddVeth(a, b, namespace, bridge string) {
 
 }
 
-func doUntagged(name string, vni int, unset bool) {
+func doUntagged(name string, vni int, unset, pvid bool) {
 
 	ctx, err := rtnl.OpenDefaultContext()
 	if err != nil {
@@ -342,7 +404,7 @@ func doUntagged(name string, vni int, unset bool) {
 	}
 	lnk.Info.Untagged = uint16(vni)
 
-	err = lnk.SetUntagged(ctx, unset)
+	err = lnk.SetUntagged(ctx, unset, pvid)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -380,7 +442,7 @@ func showLink(ctx *rtnl.Context, l *rtnl.Link) {
 
 	var typ string
 	if l.Info.Type() == rtnl.PhysicalType {
-		typ = green(l.Info.Type().String())
+		typ = cyan(l.Info.Type().String())
 	} else {
 		typ = blue(l.Info.Type().String())
 	}
@@ -407,8 +469,15 @@ func showLink(ctx *rtnl.Context, l *rtnl.Link) {
 		addrList = append(addrList, x.Info.Address.String())
 	}
 
+	var name string
+	if (l.Msg.Flags & unix.IFF_UP) != 0 {
+		name = green(l.Info.Name)
+	} else {
+		name = red(l.Info.Name)
+	}
+
 	fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n",
-		l.Info.Name,
+		name,
 		typ,
 		l.Info.Address.String(),
 		master,
