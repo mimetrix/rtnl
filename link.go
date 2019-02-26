@@ -636,6 +636,18 @@ func (l *Link) Modify(ctx *Context, op uint16) error {
 
 func (l *Link) SetUntagged(ctx *Context, unset bool, pvid bool, self bool) error {
 
+	return l.SetVlan(ctx, true, unset, pvid, self)
+
+}
+
+func (l *Link) SetTagged(ctx *Context, unset bool, pvid bool, self bool) error {
+
+	return l.SetVlan(ctx, false, unset, pvid, self)
+
+}
+
+func (l *Link) SetVlan(ctx *Context, untagged, unset, pvid, self bool) error {
+
 	orig := l.Msg.Family
 	l.Msg.Family = unix.AF_BRIDGE
 	defer func() { l.Msg.Family = orig }()
@@ -654,7 +666,10 @@ func (l *Link) SetUntagged(ctx *Context, unset bool, pvid bool, self bool) error
 			ae1 := netlink.NewAttributeEncoder()
 			ae1.Do(IFLA_BRIDGE_VLAN_INFO, func() ([]byte, error) {
 
-				var fl uint16 = BRIDGE_VLAN_INFO_UNTAGGED
+				var fl uint16 = 0
+				if untagged {
+					fl |= BRIDGE_VLAN_INFO_UNTAGGED
+				}
 				if pvid {
 					fl |= BRIDGE_VLAN_INFO_PVID
 				}
