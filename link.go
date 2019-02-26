@@ -70,11 +70,10 @@ type LinkInfo struct {
 	// bridge master
 	Master uint32
 
-	// untagged vlan id (for membership in vlan-aware bridges)
-	Untagged uint16
-
-	// vlan tags (for membership in vlan-aware bridges)
-	Tagged []uint16
+	// vlan-aware bridge properties
+	Pvid     uint16
+	Untagged []uint16
+	Tagged   []uint16
 
 	// loopback properties
 	Loopback *Loopback
@@ -248,8 +247,12 @@ func (l *Link) Unmarshal(ctx *Context, bs []byte) error {
 					flags := nlenc.Uint16(bs[:2])
 					vid := nlenc.Uint16(bs[2:4])
 
+					if (flags & BRIDGE_VLAN_INFO_PVID) != 0 {
+						l.Info.Pvid = vid
+					}
+
 					if (flags & BRIDGE_VLAN_INFO_UNTAGGED) != 0 {
-						l.Info.Untagged = vid
+						l.Info.Untagged = append(l.Info.Untagged, vid)
 					} else {
 						l.Info.Tagged = append(l.Info.Tagged, vid)
 					}
@@ -378,6 +381,7 @@ func (l *Link) Read(ctx *Context) error {
 	if l.Msg.Family == unix.AF_BRIDGE {
 		l.Info.Untagged = links[0].Info.Untagged
 		l.Info.Tagged = links[0].Info.Tagged
+		l.Info.Pvid = links[0].Info.Pvid
 	} else {
 		*l = *links[0]
 	}
@@ -636,23 +640,32 @@ func (l *Link) Modify(ctx *Context, op uint16) error {
 
 }
 
-func (l *Link) SetUntagged(ctx *Context, unset bool, pvid bool, self bool) error {
+func (l *Link) SetUntagged(ctx *Context, vid uint16, unset bool, pvid bool, self bool) error {
 
-	return l.SetVlan(ctx, true, unset, pvid, self)
-
-}
-
-func (l *Link) SetTagged(ctx *Context, unset bool, pvid bool, self bool) error {
-
-	return l.SetVlan(ctx, false, unset, pvid, self)
+	return l.SetVlan(ctx, vid, true, unset, pvid, self)
 
 }
 
-func (l *Link) SetVlan(ctx *Context, unset, untagged, pvid, self bool) error {
+func (l *Link) SetTagged(ctx *Context, vid uint16, unset bool, pvid bool, self bool) error {
+
+	return l.SetVlan(ctx, vid, false, unset, pvid, self)
+
+}
+
+func (l *Link) SetVlan(ctx *Context, vid uint16, unset, untagged, pvid, self bool) error {
+
+	if vid == 0 {
+		return nil
+	}
 
 	orig := l.Msg.Family
 	l.Msg.Family = unix.AF_BRIDGE
 	defer func() { l.Msg.Family = orig }()
+
+	err := l.Read(ctx)
+	if err != nil {
+		return err
+	}
 
 	msg := IfInfomsgBytes(l.Msg)
 
@@ -662,43 +675,74 @@ func (l *Link) SetVlan(ctx *Context, unset, untagged, pvid, self bool) error {
 		return fmt.Errorf("no link info")
 	}
 
-	var vid uint16
-	if untagged {
-		vid = l.Info.Untagged
+	if !unset {
+		if untagged {
+			for _, x := range l.Info.Untagged {
+				if x == vid {
+					//already set
+					return nil
+				}
+			}
+			l.Info.Untagged = append(l.Info.Untagged, vid)
+		} else {
+			for _, x := range l.Info.Tagged {
+				if x == vid {
+					//already set
+					return nil
+				}
+			}
+			l.Info.Tagged = append(l.Info.Tagged, vid)
+		}
 	} else {
-		//TODO multiple vlans
-		vid = l.Info.Tagged[0]
+
+		found := false
+		if untagged {
+			for _, x := range l.Info.Untagged {
+				if x == vid {
+					found = true
+					break
+				}
+			}
+		} else {
+			for _, x := range l.Info.Tagged {
+				if x == vid {
+					found = true
+					break
+				}
+			}
+		}
+
+		if !found {
+			// nothing to do
+			return nil
+		}
 	}
 
-	if vid != 0 {
+	ae.Do(unix.IFLA_AF_SPEC, func() ([]byte, error) {
 
-		ae.Do(unix.IFLA_AF_SPEC, func() ([]byte, error) {
+		ae1 := netlink.NewAttributeEncoder()
+		ae1.Do(IFLA_BRIDGE_VLAN_INFO, func() ([]byte, error) {
 
-			ae1 := netlink.NewAttributeEncoder()
-			ae1.Do(IFLA_BRIDGE_VLAN_INFO, func() ([]byte, error) {
-
-				var fl uint16 = 0
-				if untagged {
-					fl |= BRIDGE_VLAN_INFO_UNTAGGED
-				}
-				if pvid {
-					fl |= BRIDGE_VLAN_INFO_PVID
-				}
-
-				flags := nlenc.Uint16Bytes(fl)
-				evid := nlenc.Uint16Bytes(vid)
-				return append(flags, evid...), nil
-
-			})
-
-			if self {
-				ae1.Uint16(IFLA_BRIDGE_FLAGS, BRIDGE_FLAGS_SELF)
+			var fl uint16 = 0
+			if untagged {
+				fl |= BRIDGE_VLAN_INFO_UNTAGGED
 			}
-			return ae1.Encode()
+			if pvid {
+				fl |= BRIDGE_VLAN_INFO_PVID
+			}
+
+			flags := nlenc.Uint16Bytes(fl)
+			evid := nlenc.Uint16Bytes(vid)
+			return append(flags, evid...), nil
 
 		})
 
-	}
+		if self {
+			ae1.Uint16(IFLA_BRIDGE_FLAGS, BRIDGE_FLAGS_SELF)
+		}
+		return ae1.Encode()
+
+	})
 
 	attrs, err := ae.Encode()
 	if err != nil {

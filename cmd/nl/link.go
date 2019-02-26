@@ -409,13 +409,8 @@ func doVlan(name string, vni int, unset, untagged, pvid, self bool) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if untagged {
-		lnk.Info.Untagged = uint16(vni)
-	} else {
-		lnk.Info.Tagged = append(lnk.Info.Tagged, uint16(vni))
-	}
 
-	err = lnk.SetVlan(ctx, unset, untagged, pvid, self)
+	err = lnk.SetVlan(ctx, uint16(vni), unset, untagged, pvid, self)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -504,11 +499,15 @@ func props(l *rtnl.Link) string {
 
 	switch l.Info.Type() {
 	case rtnl.BridgeType:
-		s += bridgeProps(l) + " "
+		s += bridgeProps(l)
 	}
 
-	if l.Info.Master != 0 && l.Info.Untagged != 0 {
-		s += fmt.Sprintf("untagged(%d)", l.Info.Untagged)
+	if l.Info.Untagged != nil {
+		var tags []string
+		for _, x := range l.Info.Untagged {
+			tags = append(tags, fmt.Sprintf("%d", x))
+		}
+		s += fmt.Sprintf("untagged=[%s] ", strings.Join(tags, ","))
 	}
 
 	if l.Info.Tagged != nil {
@@ -516,7 +515,11 @@ func props(l *rtnl.Link) string {
 		for _, x := range l.Info.Tagged {
 			tags = append(tags, fmt.Sprintf("%d", x))
 		}
-		s += fmt.Sprintf("tagged(%s)", strings.Join(tags, ","))
+		s += fmt.Sprintf("tagged=[%s] ", strings.Join(tags, ","))
+	}
+
+	if l.Info.Pvid != 0 {
+		s += fmt.Sprintf("pvid=%d ", l.Info.Pvid)
 	}
 
 	return s
@@ -530,7 +533,7 @@ func bridgeProps(l *rtnl.Link) string {
 	}
 
 	if l.Info.Bridge.VlanAware {
-		return "vlan-aware"
+		return "vlan-aware "
 	}
 
 	return ""
