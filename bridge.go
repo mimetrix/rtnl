@@ -65,6 +65,11 @@ const (
 	BRIDGE_VLAN_INFO_BRENTRY
 )
 
+const (
+	BRIDGE_FLAGS_MASTER = 1
+	BRIDGE_FLAGS_SELF   = 2
+)
+
 type Bridge struct {
 	VlanAware bool
 }

@@ -634,7 +634,7 @@ func (l *Link) Modify(ctx *Context, op uint16) error {
 
 }
 
-func (l *Link) SetUntagged(ctx *Context, unset bool, pvid bool) error {
+func (l *Link) SetUntagged(ctx *Context, unset bool, pvid bool, self bool) error {
 
 	orig := l.Msg.Family
 	l.Msg.Family = unix.AF_BRIDGE
@@ -648,6 +648,7 @@ func (l *Link) SetUntagged(ctx *Context, unset bool, pvid bool) error {
 		return fmt.Errorf("no link info")
 	}
 	if l.Info.Untagged != 0 {
+
 		ae.Do(unix.IFLA_AF_SPEC, func() ([]byte, error) {
 
 			ae1 := netlink.NewAttributeEncoder()
@@ -663,9 +664,14 @@ func (l *Link) SetUntagged(ctx *Context, unset bool, pvid bool) error {
 				return append(flags, vid...), nil
 
 			})
+
+			if self {
+				ae1.Uint16(IFLA_BRIDGE_FLAGS, BRIDGE_FLAGS_SELF)
+			}
 			return ae1.Encode()
 
 		})
+
 	}
 
 	attrs, err := ae.Encode()

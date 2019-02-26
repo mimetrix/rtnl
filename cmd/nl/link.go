@@ -144,6 +144,7 @@ func linkCommands(root *cobra.Command) {
 
 	var (
 		pvid bool
+		self bool
 	)
 	untaggedCmd := &cobra.Command{
 		Use:   "untagged <name> <vid>",
@@ -154,10 +155,11 @@ func linkCommands(root *cobra.Command) {
 			if err != nil {
 				log.Fatal(err)
 			}
-			doUntagged(args[0], vid, false, pvid)
+			doUntagged(args[0], vid, false, pvid, self)
 		},
 	}
 	untaggedCmd.Flags().BoolVarP(&pvid, "access", "a", false, "access mode")
+	untaggedCmd.Flags().BoolVarP(&self, "self", "s", false, "apply to self")
 	set.AddCommand(untaggedCmd)
 
 	// unset
@@ -176,9 +178,10 @@ func linkCommands(root *cobra.Command) {
 			if err != nil {
 				log.Fatal(err)
 			}
-			doUntagged(args[0], vid, true, false)
+			doUntagged(args[0], vid, true, false, self)
 		},
 	}
+	noUntaggedCmd.Flags().BoolVarP(&self, "self", "s", false, "apply to self")
 	unset.AddCommand(noUntaggedCmd)
 
 }
@@ -391,7 +394,7 @@ func doAddVeth(a, b, namespace, bridge string) {
 
 }
 
-func doUntagged(name string, vni int, unset, pvid bool) {
+func doUntagged(name string, vni int, unset, pvid, self bool) {
 
 	ctx, err := rtnl.OpenDefaultContext()
 	if err != nil {
@@ -404,7 +407,7 @@ func doUntagged(name string, vni int, unset, pvid bool) {
 	}
 	lnk.Info.Untagged = uint16(vni)
 
-	err = lnk.SetUntagged(ctx, unset, pvid)
+	err = lnk.SetUntagged(ctx, unset, pvid, self)
 	if err != nil {
 		log.Fatal(err)
 	}
