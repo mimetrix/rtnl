@@ -73,7 +73,6 @@ func linkCommands(root *cobra.Command) {
 		local    string
 		vxlink   string
 		vxbr     string
-		untagged uint16
 	)
 	addVxlan := &cobra.Command{
 		Use:   "vxlan <name> <vni>",
@@ -91,7 +90,7 @@ func linkCommands(root *cobra.Command) {
 				log.Fatal(err)
 			}
 			vxinfo.Vni = uint32(vni)
-			doAddVxlan(args[0], vxlink, vxbr, untagged, vxinfo)
+			doAddVxlan(args[0], vxlink, vxbr, vxinfo)
 		},
 	}
 	addVxlan.Flags().BoolVarP(&learning, "learning", "l", false, "enable mac learning")
@@ -99,7 +98,6 @@ func linkCommands(root *cobra.Command) {
 	addVxlan.Flags().StringVarP(&local, "local", "t", "", "local tunnel IP")
 	addVxlan.Flags().StringVarP(&vxlink, "link", "i", "", "parent link")
 	addVxlan.Flags().StringVarP(&vxbr, "bridge", "b", "", "add to bridge")
-	addVxlan.Flags().Uint16VarP(&untagged, "untagged", "u", 0, "set untagged bridge vlan")
 	add.AddCommand(addVxlan)
 
 	// addVeth
@@ -253,7 +251,7 @@ func doAddBridge(name string, info *rtnl.Bridge) {
 
 }
 
-func doAddVxlan(name, parent, bridge string, untagged uint16, info *rtnl.Vxlan) {
+func doAddVxlan(name, parent, bridge string, info *rtnl.Vxlan) {
 
 	ctx, err := rtnl.OpenDefaultContext()
 	if err != nil {
@@ -275,8 +273,6 @@ func doAddVxlan(name, parent, bridge string, untagged uint16, info *rtnl.Vxlan) 
 			Vxlan: info,
 		},
 	}
-
-	lnk.Info.Untagged = untagged
 
 	if bridge != "" {
 		b, err := rtnl.GetLink(ctx, bridge)

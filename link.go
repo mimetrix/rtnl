@@ -653,7 +653,7 @@ func (l *Link) SetUntagged(ctx *Context, unset bool) error {
 			ae1 := netlink.NewAttributeEncoder()
 			ae1.Do(IFLA_BRIDGE_VLAN_INFO, func() ([]byte, error) {
 
-				flags := nlenc.Uint16Bytes(BRIDGE_VLAN_INFO_UNTAGGED)
+				flags := nlenc.Uint16Bytes(BRIDGE_VLAN_INFO_UNTAGGED | BRIDGE_VLAN_INFO_PVID)
 				vid := nlenc.Uint16Bytes(l.Info.Untagged)
 				return append(flags, vid...), nil
 
