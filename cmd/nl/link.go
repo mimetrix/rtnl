@@ -143,24 +143,26 @@ func linkCommands(root *cobra.Command) {
 	link.AddCommand(set)
 
 	var (
-		pvid bool
-		self bool
+		untagged bool
+		pvid     bool
+		self     bool
 	)
-	untaggedCmd := &cobra.Command{
-		Use:   "untagged <name> <vid>",
-		Short: "set link untagged bridge vlan",
+	vlanCmd := &cobra.Command{
+		Use:   "vlan <name> <vid>",
+		Short: "set link vlan",
 		Args:  cobra.ExactArgs(2),
 		Run: func(cmd *cobra.Command, args []string) {
 			vid, err := strconv.Atoi(args[1])
 			if err != nil {
 				log.Fatal(err)
 			}
-			doUntagged(args[0], vid, false, pvid, self)
+			doVlan(args[0], vid, false, untagged, pvid, self)
 		},
 	}
-	untaggedCmd.Flags().BoolVarP(&pvid, "access", "a", false, "access mode")
-	untaggedCmd.Flags().BoolVarP(&self, "self", "s", false, "apply to self")
-	set.AddCommand(untaggedCmd)
+	vlanCmd.Flags().BoolVarP(&untagged, "untagged", "u", false, "untagged vlan")
+	vlanCmd.Flags().BoolVarP(&pvid, "access", "a", false, "access vlan")
+	vlanCmd.Flags().BoolVarP(&self, "self", "s", false, "bridge vlan")
+	set.AddCommand(vlanCmd)
 
 	// unset
 	unset := &cobra.Command{
@@ -169,20 +171,22 @@ func linkCommands(root *cobra.Command) {
 	}
 	link.AddCommand(unset)
 
-	noUntaggedCmd := &cobra.Command{
-		Use:   "untagged <name> <vid>",
-		Short: "unset link untagged bridge vlan",
+	noVlanCmd := &cobra.Command{
+		Use:   "vlan <name> <vid>",
+		Short: "unset link vlan",
 		Args:  cobra.ExactArgs(2),
 		Run: func(cmd *cobra.Command, args []string) {
 			vid, err := strconv.Atoi(args[1])
 			if err != nil {
 				log.Fatal(err)
 			}
-			doUntagged(args[0], vid, true, false, self)
+			doVlan(args[0], vid, true, untagged, pvid, self)
 		},
 	}
-	noUntaggedCmd.Flags().BoolVarP(&self, "self", "s", false, "apply to self")
-	unset.AddCommand(noUntaggedCmd)
+	noVlanCmd.Flags().BoolVarP(&untagged, "untagged", "u", false, "untagged vlan")
+	noVlanCmd.Flags().BoolVarP(&pvid, "access", "a", false, "access vlan")
+	noVlanCmd.Flags().BoolVarP(&self, "self", "s", false, "bridge vlan")
+	unset.AddCommand(noVlanCmd)
 
 }
 
@@ -394,7 +398,7 @@ func doAddVeth(a, b, namespace, bridge string) {
 
 }
 
-func doUntagged(name string, vni int, unset, pvid, self bool) {
+func doVlan(name string, vni int, unset, untagged, pvid, self bool) {
 
 	ctx, err := rtnl.OpenDefaultContext()
 	if err != nil {
@@ -405,9 +409,13 @@ func doUntagged(name string, vni int, unset, pvid, self bool) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	lnk.Info.Untagged = uint16(vni)
+	if untagged {
+		lnk.Info.Untagged = uint16(vni)
+	} else {
+		lnk.Info.Tagged = append(lnk.Info.Tagged, uint16(vni))
+	}
 
-	err = lnk.SetUntagged(ctx, unset, pvid, self)
+	err = lnk.SetVlan(ctx, unset, untagged, pvid, self)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -473,7 +481,7 @@ func showLink(ctx *rtnl.Context, l *rtnl.Link) {
 	}
 
 	var name string
-	if (l.Msg.Flags & unix.IFF_UP) != 0 {
+	if (l.Msg.Flags&unix.IFF_UP) != 0 && (l.Msg.Flags&unix.IFF_LOWER_UP) != 0 {
 		name = green(l.Info.Name)
 	} else {
 		name = red(l.Info.Name)
@@ -501,6 +509,14 @@ func props(l *rtnl.Link) string {
 
 	if l.Info.Master != 0 && l.Info.Untagged != 0 {
 		s += fmt.Sprintf("untagged(%d)", l.Info.Untagged)
+	}
+
+	if l.Info.Tagged != nil {
+		var tags []string
+		for _, x := range l.Info.Tagged {
+			tags = append(tags, fmt.Sprintf("%d", x))
+		}
+		s += fmt.Sprintf("tagged(%s)", strings.Join(tags, ","))
 	}
 
 	return s

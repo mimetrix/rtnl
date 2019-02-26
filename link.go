@@ -250,6 +250,8 @@ func (l *Link) Unmarshal(ctx *Context, bs []byte) error {
 
 					if (flags & BRIDGE_VLAN_INFO_UNTAGGED) != 0 {
 						l.Info.Untagged = vid
+					} else {
+						l.Info.Tagged = append(l.Info.Tagged, vid)
 					}
 				}
 			}
@@ -646,7 +648,7 @@ func (l *Link) SetTagged(ctx *Context, unset bool, pvid bool, self bool) error {
 
 }
 
-func (l *Link) SetVlan(ctx *Context, untagged, unset, pvid, self bool) error {
+func (l *Link) SetVlan(ctx *Context, unset, untagged, pvid, self bool) error {
 
 	orig := l.Msg.Family
 	l.Msg.Family = unix.AF_BRIDGE
@@ -659,7 +661,16 @@ func (l *Link) SetVlan(ctx *Context, untagged, unset, pvid, self bool) error {
 	if l.Info == nil {
 		return fmt.Errorf("no link info")
 	}
-	if l.Info.Untagged != 0 {
+
+	var vid uint16
+	if untagged {
+		vid = l.Info.Untagged
+	} else {
+		//TODO multiple vlans
+		vid = l.Info.Tagged[0]
+	}
+
+	if vid != 0 {
 
 		ae.Do(unix.IFLA_AF_SPEC, func() ([]byte, error) {
 
@@ -674,9 +685,9 @@ func (l *Link) SetVlan(ctx *Context, untagged, unset, pvid, self bool) error {
 					fl |= BRIDGE_VLAN_INFO_PVID
 				}
 
-				flags := nlenc.Uint16Bytes(BRIDGE_VLAN_INFO_UNTAGGED | BRIDGE_VLAN_INFO_PVID)
-				vid := nlenc.Uint16Bytes(l.Info.Untagged)
-				return append(flags, vid...), nil
+				flags := nlenc.Uint16Bytes(fl)
+				evid := nlenc.Uint16Bytes(vid)
+				return append(flags, evid...), nil
 
 			})
 
