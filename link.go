@@ -636,7 +636,10 @@ func (l *Link) Modify(ctx *Context, op uint16) error {
 
 func (l *Link) SetUntagged(ctx *Context, unset bool) error {
 
+	orig := l.Msg.Family
 	l.Msg.Family = unix.AF_BRIDGE
+	defer func() { l.Msg.Family = orig }()
+
 	msg := IfInfomsgBytes(l.Msg)
 
 	ae := netlink.NewAttributeEncoder()
