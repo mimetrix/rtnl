@@ -443,8 +443,7 @@ func doMtu(name string, mtu int) {
 		log.Fatal(err)
 	}
 
-	lnk.Info.Mtu = uint32(mtu)
-	err = lnk.Set(ctx)
+	err = lnk.SetMtu(ctx, mtu)
 	if err != nil {
 		log.Fatal(err)
 	}

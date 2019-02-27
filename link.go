@@ -301,6 +301,45 @@ func (l *Link) Unmarshal(ctx *Context, bs []byte) error {
 
 }
 
+func (l *Link) SetMtu(ctx *Context, mtu int) error {
+
+	if mtu == 0 {
+		return nil
+	}
+
+	err := l.Read(ctx)
+	if err != nil {
+		return err
+	}
+
+	msg := IfInfomsgBytes(l.Msg)
+
+	ae := netlink.NewAttributeEncoder()
+	ae.Uint32(unix.IFLA_MTU, uint32(mtu))
+
+	attrs, err := ae.Encode()
+	if err != nil {
+		return err
+	}
+
+	data := append(msg, attrs...)
+
+	flags := netlink.HeaderFlagsRequest |
+		netlink.HeaderFlagsAcknowledge |
+		netlink.HeaderFlagsExcl
+
+	m := netlink.Message{
+		Header: netlink.Header{
+			Type:  netlink.HeaderType(unix.RTM_SETLINK),
+			Flags: flags,
+		},
+		Data: data,
+	}
+
+	return netlinkUpdate(ctx, []netlink.Message{m})
+
+}
+
 // ReadLinks reads a set of links according to the provided specification. For
 // example, if you specify the address family, only links from that family will
 // be returned. Some basic attribute filtering is also implemented.
