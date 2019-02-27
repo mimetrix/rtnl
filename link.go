@@ -64,6 +64,9 @@ type LinkInfo struct {
 	// network namespace file descriptor
 	Ns uint32
 
+	// maximum transmission unit
+	Mtu uint32
+
 	// the network namespace the link is in
 	LinkNS uint32
 
@@ -135,6 +138,9 @@ func (l Link) Marshal(ctx *Context) ([]byte, error) {
 			}
 			if l.Info.Address != nil && !isZeroMac(l.Info.Address) {
 				ae.Bytes(unix.IFLA_ADDRESS, l.Info.Address)
+			}
+			if l.Info.Mtu != 0 {
+				ae.Uint32(unix.IFLA_MTU, l.Info.Mtu)
 			}
 			if l.Msg.Family == unix.AF_BRIDGE {
 				ae.Uint32(unix.IFLA_EXT_MASK, 2)
@@ -261,6 +267,9 @@ func (l *Link) Unmarshal(ctx *Context, bs []byte) error {
 
 		case unix.IFLA_LINK:
 			link = ad.Uint32()
+
+		case unix.IFLA_MTU:
+			l.Info.Mtu = ad.Uint32()
 
 		case unix.IFLA_NET_NS_FD:
 			l.Info.Ns = ad.Uint32()

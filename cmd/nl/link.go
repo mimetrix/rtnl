@@ -164,6 +164,20 @@ func linkCommands(root *cobra.Command) {
 	vlanCmd.Flags().BoolVarP(&self, "self", "s", false, "bridge vlan")
 	set.AddCommand(vlanCmd)
 
+	mtuCmd := &cobra.Command{
+		Use:   "mtu <name> <mtu>",
+		Short: "set link mtu",
+		Args:  cobra.ExactArgs(2),
+		Run: func(cmd *cobra.Command, args []string) {
+			mtu, err := strconv.Atoi(args[1])
+			if err != nil {
+				log.Fatal(err)
+			}
+			doMtu(args[0], mtu)
+		},
+	}
+	set.AddCommand(mtuCmd)
+
 	// unset
 	unset := &cobra.Command{
 		Use:   "unset",
@@ -417,6 +431,26 @@ func doVlan(name string, vni int, unset, untagged, pvid, self bool) {
 
 }
 
+func doMtu(name string, mtu int) {
+
+	ctx, err := rtnl.OpenDefaultContext()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	lnk, err := rtnl.GetLink(ctx, name)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	lnk.Info.Mtu = uint32(mtu)
+	err = lnk.Set(ctx)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+}
+
 // helpers ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 type FilterFunc func(link *rtnl.Link) bool
 
@@ -521,6 +555,8 @@ func props(l *rtnl.Link) string {
 	if l.Info.Pvid != 0 {
 		s += fmt.Sprintf("pvid=%d ", l.Info.Pvid)
 	}
+
+	s += fmt.Sprintf("mtu=%d ", l.Info.Mtu)
 
 	return s
 
