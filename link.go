@@ -336,6 +336,8 @@ func (l *Link) SetMtu(ctx *Context, mtu int) error {
 		Data: data,
 	}
 
+	l.Info.Mtu = uint32(mtu)
+
 	return netlinkUpdate(ctx, []netlink.Message{m})
 
 }
