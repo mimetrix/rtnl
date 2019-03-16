@@ -537,7 +537,7 @@ func (l *Link) ApplyType(typ string) Attributes {
 
 	}
 
-	log.Warnf("unknown type %s", typ)
+	log.Tracef("unknown type %s", typ)
 
 	return nil
 
