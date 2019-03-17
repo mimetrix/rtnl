@@ -22,7 +22,7 @@ func (c *Context) Fd() int {
 	return int(c.f.Fd())
 }
 func (c *Context) Close() error {
-	if c.f == nil {
+	if c == nil || c.f == nil {
 		return nil
 	}
 	return c.f.Close()
