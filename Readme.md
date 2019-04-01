@@ -23,19 +23,28 @@ the like.
 
 ## Design
 
-rtnl is structured around 4 basic rtnetlink objects.
+rtnl is structured around 5 basic rtnetlink objects.
 
 - links
 - routes
 - neighbors
 - addresses
+- routing rules
+
+Support for the following virtual link types exists
+
+- veth
+- vxlan
+- vrf
+- macvlan
+- tun/tap
 
 There is a high level object for each of these object kinds with management
-functions exposed.
+functions exposed. There is also support for managing the namespaces of these
+objects.
 
 Support for the remaining objects may come in time
 
-- rules
 - qdiscs
 - tclass
 - tfilter
