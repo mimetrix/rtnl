@@ -30,6 +30,7 @@ func main() {
 	linkCommands(root)
 	ruleCommands(root)
 	routeCommands(root)
+	vrfCommands(root)
 
 	root.Execute()
 

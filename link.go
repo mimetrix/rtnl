@@ -29,6 +29,7 @@ const (
 	BridgeType
 	TapType
 	TunType
+	VrfType
 )
 
 // interface link address attribute types
@@ -95,6 +96,9 @@ type LinkInfo struct {
 
 	// tun properties
 	Tun *Tun
+
+	// vrf properties
+	Vrf *Vrf
 }
 
 // Methods ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -535,6 +539,10 @@ func (l *Link) ApplyType(typ string) Attributes {
 		l.Info.Tun = &Tun{}
 		return l.Info.Tun
 
+	case "vrf":
+		l.Info.Vrf = &Vrf{}
+		return l.Info.Vrf
+
 	}
 
 	log.Tracef("unknown type %s", typ)
@@ -563,6 +571,9 @@ func (li *LinkInfo) Type() LinkType {
 	if li.Tun != nil {
 		return TunType
 	}
+	if li.Vrf != nil {
+		return VrfType
+	}
 
 	//TODO Is this a reasonable default? Given the logic of how types are
 	//ascertained i think its at least decent.
@@ -585,6 +596,10 @@ func (l *Link) Attributes() []Attributes {
 
 	if l.Info != nil && l.Info.Bridge != nil {
 		result = append(result, l.Info.Bridge)
+	}
+
+	if l.Info != nil && l.Info.Vrf != nil {
+		result = append(result, l.Info.Vrf)
 	}
 
 	return result
@@ -910,6 +925,8 @@ func (lt LinkType) String() string {
 		return "tap"
 	case TunType:
 		return "tun"
+	case VrfType:
+		return "vrf"
 	default:
 		return "unspec"
 	}
@@ -933,6 +950,8 @@ func ParseLinkType(str string) LinkType {
 		return TapType
 	case "tun":
 		return TunType
+	case "vrf":
+		return VrfType
 	default:
 		return UnspecLinkType
 	}
