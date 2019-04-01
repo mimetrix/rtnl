@@ -10,6 +10,9 @@ test:
     - cd cmd/nl
     - go build
     - sudo cp nl /srv/bin/nl
+  artifacts:
+    paths:
+      - cmd/nl/nl
   tags:
     - merge
     - shell
