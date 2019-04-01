@@ -6,13 +6,11 @@ test:
   stage: test
   script:
     - unset GOPATH
-    - sudo -E /usr/local/go/bin/go test
-    - cd cmd/nl
-    - go build
-    - sudo cp nl /srv/bin/nl
+    - make clean
+    - make
   artifacts:
     paths:
-      - cmd/nl/nl
+      - build/*
   tags:
     - merge
     - shell

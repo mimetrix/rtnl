@@ -11,6 +11,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+var Version = "undefined"
+
 type Context struct {
 	f *os.File
 }

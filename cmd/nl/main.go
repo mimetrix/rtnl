@@ -7,6 +7,8 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
+
+	"gitlab.com/mergetb/tech/rtnl"
 )
 
 var tw = tabwriter.NewWriter(os.Stdout, 0, 0, 4, ' ', 0)
@@ -26,6 +28,14 @@ func main() {
 		Use:   "nl",
 		Short: "netlink command line client",
 	}
+
+	version := &cobra.Command{
+		Use:   "version",
+		Short: "show version",
+		Args:  cobra.NoArgs,
+		Run:   func(*cobra.Command, []string) { log.Println(rtnl.Version) },
+	}
+	root.AddCommand(version)
 
 	linkCommands(root)
 	ruleCommands(root)
