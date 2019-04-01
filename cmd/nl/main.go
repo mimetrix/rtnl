@@ -31,6 +31,7 @@ func main() {
 	ruleCommands(root)
 	routeCommands(root)
 	vrfCommands(root)
+	macvlanCommands(root)
 
 	root.Execute()
 

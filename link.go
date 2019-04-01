@@ -30,6 +30,7 @@ const (
 	TapType
 	TunType
 	VrfType
+	MacvlanType
 )
 
 // interface link address attribute types
@@ -99,6 +100,9 @@ type LinkInfo struct {
 
 	// vrf properties
 	Vrf *Vrf
+
+	// macvlan properties
+	Macvlan *Macvlan
 }
 
 // Methods ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -288,6 +292,12 @@ func (l *Link) Unmarshal(ctx *Context, bs []byte) error {
 	veth, ok := lattr.(*Veth)
 	if ok {
 		veth.PeerIfx = link
+	}
+
+	// grap macvlan specific things
+	macvlan, ok := lattr.(*Macvlan)
+	if ok {
+		macvlan.Link = link
 	}
 
 	// should not happen
@@ -543,6 +553,10 @@ func (l *Link) ApplyType(typ string) Attributes {
 		l.Info.Vrf = &Vrf{}
 		return l.Info.Vrf
 
+	case "macvlan":
+		l.Info.Macvlan = &Macvlan{}
+		return l.Info.Macvlan
+
 	}
 
 	log.Tracef("unknown type %s", typ)
@@ -574,6 +588,9 @@ func (li *LinkInfo) Type() LinkType {
 	if li.Vrf != nil {
 		return VrfType
 	}
+	if li.Macvlan != nil {
+		return MacvlanType
+	}
 
 	//TODO Is this a reasonable default? Given the logic of how types are
 	//ascertained i think its at least decent.
@@ -600,6 +617,10 @@ func (l *Link) Attributes() []Attributes {
 
 	if l.Info != nil && l.Info.Vrf != nil {
 		result = append(result, l.Info.Vrf)
+	}
+
+	if l.Info != nil && l.Info.Macvlan != nil {
+		result = append(result, l.Info.Macvlan)
 	}
 
 	return result
@@ -927,6 +948,8 @@ func (lt LinkType) String() string {
 		return "tun"
 	case VrfType:
 		return "vrf"
+	case MacvlanType:
+		return "macvlan"
 	default:
 		return "unspec"
 	}
@@ -952,6 +975,8 @@ func ParseLinkType(str string) LinkType {
 		return TunType
 	case "vrf":
 		return VrfType
+	case "macvlan":
+		return MacvlanType
 	default:
 		return UnspecLinkType
 	}
