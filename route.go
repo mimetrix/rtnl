@@ -12,6 +12,7 @@ import (
 
 // Route encapsulates information about a route
 type Route struct {
+	Hdr      unix.RtMsg
 	Dest     net.IP
 	Src      net.IP
 	Gateway  net.IP
@@ -20,10 +21,11 @@ type Route struct {
 	Iif      uint32
 	Priority uint32
 	Metrics  uint32
-	Family   uint8
+	Table    uint32
 }
 
 // RtMsg encapsulates a unix.RtMsg providing marshal/unmarshal operations and
+/*
 type RtMsg struct {
 	Msg           unix.RtMsg
 	RawAttributes []netlink.Attribute
@@ -31,17 +33,15 @@ type RtMsg struct {
 	// extracted attribures
 	Route
 }
+*/
 
 // Marshal a route message to bytes
-func (rtm RtMsg) Marshal() ([]byte, error) {
+func (r *Route) Marshal() ([]byte, error) {
 
-	m := rtm.Msg
+	m := r.Hdr
 
 	flags := make([]byte, 4)
 	binary.LittleEndian.PutUint32(flags, m.Flags)
-
-	oif := make([]byte, 4)
-	binary.LittleEndian.PutUint32(oif, rtm.Oif)
 
 	message := []byte{
 		m.Family,
@@ -55,44 +55,45 @@ func (rtm RtMsg) Marshal() ([]byte, error) {
 		flags[0], flags[1], flags[2], flags[3],
 	}
 
-	attrs := []netlink.Attribute{
-		// destination
-		{
-			Length: 4 + 4,
-			Type:   unix.RTA_DST,
-			Data:   rtm.Dest.To4(),
-		},
-		// gateway
-		{
-			Length: 4 + 4,
-			Type:   unix.RTA_GATEWAY,
-			Data:   rtm.Gateway.To4(),
-		},
-		// outbound interface
-		{
-			Length: 4 + 4,
-			Type:   unix.RTA_OIF,
-			Data:   oif,
-		},
+	ae := netlink.NewAttributeEncoder()
+
+	if r.Dest != nil {
+		ae.Bytes(unix.RTA_DST, r.Dest.To4())
 	}
 
-	if rtm.Route.Metrics != 0 {
-
-		metrics := make([]byte, 4)
-		binary.LittleEndian.PutUint32(metrics, rtm.Route.Metrics)
-
-		attrs = append(attrs, netlink.Attribute{
-			Length: 4 + 4,
-			Type:   unix.RTA_METRICS,
-			Data:   metrics,
-		})
-
+	if r.Src != nil {
+		ae.Bytes(unix.RTA_SRC, r.Src.To4())
 	}
-	//TODO add other known attributes if not zero values
 
-	//attrs = append(attrs, rtm.RawAttributes...)
+	if r.Gateway != nil {
+		ae.Bytes(unix.RTA_GATEWAY, r.Gateway.To4())
+	}
 
-	attributes, err := netlink.MarshalAttributes(attrs)
+	if r.PrefSrc != nil {
+		ae.Bytes(unix.RTA_PREFSRC, r.PrefSrc.To4())
+	}
+
+	if r.Oif != 0 {
+		ae.Uint32(unix.RTA_OIF, r.Oif)
+	}
+
+	if r.Iif != 0 {
+		ae.Uint32(unix.RTA_IIF, r.Iif)
+	}
+
+	if r.Priority != 0 {
+		ae.Uint32(unix.RTA_PRIORITY, r.Priority)
+	}
+
+	if r.Metrics != 0 {
+		ae.Uint32(unix.RTA_METRICS, r.Metrics)
+	}
+
+	if r.Table != 0 {
+		ae.Uint32(unix.RTA_TABLE, r.Table)
+	}
+
+	attributes, err := ae.Encode()
 	if err != nil {
 		return nil, err
 	}
@@ -101,11 +102,11 @@ func (rtm RtMsg) Marshal() ([]byte, error) {
 }
 
 // Unmarshal an route message and its attributes from bytes
-func (rtm *RtMsg) Unmarshal(bs []byte) error {
+func (r *Route) Unmarshal(bs []byte) error {
 
 	flags := binary.LittleEndian.Uint32(bs[8:12])
 
-	rtm.Msg = unix.RtMsg{
+	r.Hdr = unix.RtMsg{
 		Family:   bs[0],
 		Dst_len:  bs[1],
 		Src_len:  bs[2],
@@ -127,28 +128,24 @@ func (rtm *RtMsg) Unmarshal(bs []byte) error {
 		switch ad.Type() {
 
 		case unix.RTA_DST:
-			rtm.Dest = net.IP(ad.Bytes())
+			r.Dest = net.IP(ad.Bytes())
 		case unix.RTA_SRC:
-			rtm.Src = net.IP(ad.Bytes())
+			r.Src = net.IP(ad.Bytes())
 		case unix.RTA_GATEWAY:
-			rtm.Gateway = net.IP(ad.Bytes())
+			r.Gateway = net.IP(ad.Bytes())
 		case unix.RTA_PREFSRC:
-			rtm.PrefSrc = net.IP(ad.Bytes())
-		case unix.RTA_IIF:
-			rtm.Iif = ad.Uint32()
+			r.PrefSrc = net.IP(ad.Bytes())
 		case unix.RTA_OIF:
-			rtm.Oif = ad.Uint32()
+			r.Oif = ad.Uint32()
+		case unix.RTA_IIF:
+			r.Iif = ad.Uint32()
 		case unix.RTA_PRIORITY:
-			rtm.Priority = ad.Uint32()
+			r.Priority = ad.Uint32()
 		case unix.RTA_METRICS:
-			rtm.Metrics = ad.Uint32()
+			r.Metrics = ad.Uint32()
+		case unix.RTA_TABLE:
+			r.Table = ad.Uint32()
 
-		default:
-			rtm.RawAttributes = append(rtm.RawAttributes, netlink.Attribute{
-				Length: uint16(len(ad.Bytes()) + 4), // +4 for length & type fields
-				Type:   ad.Type(),
-				Data:   ad.Bytes(),
-			})
 		}
 	}
 
@@ -156,146 +153,124 @@ func (rtm *RtMsg) Unmarshal(bs []byte) error {
 
 }
 
-// read all routes from netlink returning a map that is keyed based on the
-// route destination
-func readRoutes() (map[string]Route, error) {
+func ReadRoutes(ctx *Context, spec *Route) ([]*Route, error) {
 
-	conn, err := netlink.Dial(unix.NETLINK_ROUTE, nil)
-	if err != nil {
-		log.WithError(err).Error("failed to dial netlink")
-		return nil, err
-	}
-	defer conn.Close()
-
-	rtmsg, err := RtMsg{
-		Msg: unix.RtMsg{
-			Family: unix.AF_INET,
-			Table:  unix.RT_TABLE_DEFAULT,
-		},
-	}.Marshal()
-	if err != nil {
-		log.WithError(err).Error("failed to marshal rtmsg")
-		return nil, err
-	}
+	var result []*Route
 
 	m := netlink.Message{
 		Header: netlink.Header{
-			Type: unix.RTM_GETROUTE,
-			Flags: netlink.HeaderFlagsRequest |
-				netlink.HeaderFlagsAtomic |
-				netlink.HeaderFlagsRoot,
+			Type:  unix.RTM_GETROUTE,
+			Flags: netlink.HeaderFlagsRequest | netlink.HeaderFlagsRoot,
 		},
-		Data: rtmsg,
 	}
 
-	resp, err := conn.Execute(m)
+	if spec == nil {
+		spec = &Route{}
+	}
+
+	data, err := spec.Marshal()
+	if err != nil {
+		return nil, err
+	}
+	m.Data = data
+
+	err = withNsNetlink(ctx.Fd(), func(conn *netlink.Conn) error {
+
+		resp, err := conn.Execute(m)
+		if err != nil {
+			return err
+		}
+
+		for _, r := range resp {
+
+			route := &Route{}
+			err := route.Unmarshal(r.Data)
+			if err != nil {
+				return fmt.Errorf("error reading route: %v", err)
+			}
+
+			result = append(result, route)
+
+		}
+
+		return nil
+
+	})
+
 	if err != nil {
 		return nil, err
 	}
 
-	log.Debugf("current baselayer routes (%d)", len(resp))
+	return result, nil
 
-	rts := make(map[string]Route)
-	for _, r := range resp {
+}
 
-		var rtm RtMsg
-		rtm.Unmarshal(r.Data)
+func (r *Route) Add(ctx *Context) error {
 
-		log.WithFields(log.Fields{
-			"dest":    rtm.Route.Dest,
-			"Gateway": rtm.Route.Gateway,
-			"Oif":     rtm.Route.Oif,
-		}).Debug("route")
+	return r.Modify(ctx, unix.RTM_NEWROUTE)
 
-		rtm.Route.Family = rtm.Family
-		rts[rtm.Route.Dest.String()] = rtm.Route
+}
 
+func (r *Route) Present(ctx *Context) error {
+
+	err := r.Add(ctx)
+	if err != nil && err.Error() != "file exists" {
+		return err
 	}
 
-	return rts, nil
+	return nil
 
 }
 
-func addRoutes(ctx *Context, rs []Route) error {
+func (r *Route) Del(ctx *Context) error {
 
-	return modifyRoutes(ctx, rs, unix.RTM_NEWROUTE)
+	return r.Modify(ctx, unix.RTM_DELROUTE)
+}
+
+func (r *Route) Absent(ctx *Context) error {
+
+	err := r.Add(ctx)
+	if err != nil && err.Error() != "no such file or directory" {
+		return err
+	}
+
+	return nil
 
 }
 
-func removeRoutes(ctx *Context, rs []Route) error {
+func (r *Route) Modify(ctx *Context, op uint16) error {
 
-	return modifyRoutes(ctx, rs, unix.RTM_DELROUTE)
+	if r.Hdr.Family == 0 {
+		r.Hdr.Family = unix.AF_INET
+	}
+	if r.Table == 0 {
+		r.Hdr.Table = unix.RT_TABLE_MAIN
+	}
+	if r.Hdr.Type == 0 {
+		r.Hdr.Type = unix.RTN_UNICAST
+	}
 
-}
+	data, err := r.Marshal()
+	if err != nil {
+		return err
+	}
 
-// modify a set of routes
-// op=RTM_NEWROUTE ---> add
-// op=RTM_DELROUTE ---> remove
-func modifyRoutes(ctx *Context, rs []Route, op uint16) error {
+	flags := netlink.HeaderFlagsRequest |
+		netlink.HeaderFlagsAcknowledge |
+		netlink.HeaderFlagsExcl
 
-	// prepare netlink messages
-	var messages []netlink.Message
-
-	flags := netlink.HeaderFlagsRequest | netlink.HeaderFlagsAcknowledge
 	if op == unix.RTM_NEWROUTE {
 		flags |= netlink.HeaderFlagsCreate | netlink.HeaderFlagsAppend
 	}
 
-	for _, r := range rs {
-
-		fields := log.Fields{
-			"op":    op,
-			"route": fmt.Sprintf("%+v", r),
-		}
-
-		switch op {
-
-		case unix.RTM_NEWROUTE:
-			log.WithFields(fields).Info("adding route")
-
-		case unix.RTM_DELROUTE:
-			log.WithFields(fields).Info("removing route")
-
-		default:
-			log.WithFields(fields).Warning("unsupported route operation, skipping")
-			continue
-
-		}
-
-		r.Metrics = 20 //default for BGP
-
-		msg := RtMsg{
-			Msg: unix.RtMsg{
-				Family:   unix.AF_INET, // r.Family, //unix.AF_INET,
-				Table:    unix.RT_TABLE_MAIN,
-				Type:     unix.RTN_UNICAST,
-				Protocol: unix.RTPROT_BGP,
-				Scope:    unix.RT_SCOPE_UNIVERSE,
-				Flags:    unix.RTNH_F_ONLINK,
-				Dst_len:  32,
-			},
-			Route: r,
-		}
-
-		data, err := msg.Marshal()
-		if err != nil {
-			log.WithError(err).Error("failed to marshal rtmsg")
-			return err
-		}
-
-		m := netlink.Message{
-			Header: netlink.Header{
-				Type:  netlink.HeaderType(op),
-				Flags: flags,
-			},
-			Data: data,
-		}
-
-		messages = append(messages, m)
-
+	m := netlink.Message{
+		Header: netlink.Header{
+			Type:  netlink.HeaderType(op),
+			Flags: flags,
+		},
+		Data: data,
 	}
 
-	// send netlink messages
-	return netlinkUpdate(ctx, messages)
+	return netlinkUpdate(ctx, []netlink.Message{m})
 
 }

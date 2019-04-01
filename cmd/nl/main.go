@@ -28,6 +28,8 @@ func main() {
 	}
 
 	linkCommands(root)
+	ruleCommands(root)
+	routeCommands(root)
 
 	root.Execute()
 
