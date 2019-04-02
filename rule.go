@@ -38,6 +38,18 @@ const (
 	FRA_DPORT_RANGE
 )
 
+const (
+	FR_ACT_UNSPEC uint8 = iota
+	FR_ACT_TO_TBL
+	FR_ACT_GOTO
+	FR_ACT_NOP
+	FR_ACT_RES3
+	FR_ACT_RES4
+	FR_ACT_BLACKHOLE
+	FR_ACT_UNREACHABLE
+	FR_ACT_PROHIBIT
+)
+
 type Rule struct {
 	Fib      Fib
 	Priority uint32
@@ -62,6 +74,11 @@ type Fib struct {
 }
 
 func (r *Rule) Marshal(ctx *Context) ([]byte, error) {
+
+	// defaults
+	if r.Fib.Action == 0 {
+		r.Fib.Action = FR_ACT_TO_TBL
+	}
 
 	// header
 
