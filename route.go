@@ -24,17 +24,6 @@ type Route struct {
 	Table    uint32
 }
 
-// RtMsg encapsulates a unix.RtMsg providing marshal/unmarshal operations and
-/*
-type RtMsg struct {
-	Msg           unix.RtMsg
-	RawAttributes []netlink.Attribute
-
-	// extracted attribures
-	Route
-}
-*/
-
 // Marshal a route message to bytes
 func (r *Route) Marshal() ([]byte, error) {
 
@@ -229,7 +218,7 @@ func (r *Route) Del(ctx *Context) error {
 
 func (r *Route) Absent(ctx *Context) error {
 
-	err := r.Add(ctx)
+	err := r.Del(ctx)
 	if err != nil && err.Error() != "no such file or directory" {
 		return err
 	}
