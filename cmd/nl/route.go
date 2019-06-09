@@ -45,8 +45,8 @@ func routeCommands(root *cobra.Command) {
 	}
 
 	add := &cobra.Command{
-		Use:   "add",
-		Short: "add route <dest>",
+		Use:   "add <test>",
+		Short: "add a route",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 
@@ -68,8 +68,8 @@ func routeCommands(root *cobra.Command) {
 	route.AddCommand(add)
 
 	del := &cobra.Command{
-		Use:   "del",
-		Short: "del route <dest>",
+		Use:   "del <dest>",
+		Short: "delete a route",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 
