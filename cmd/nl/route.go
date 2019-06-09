@@ -13,22 +13,22 @@ import (
 
 func routeCommands(root *cobra.Command) {
 
+	var (
+		table int
+	)
 	route := &cobra.Command{
 		Use:   "route",
 		Short: "route command family",
 	}
+	route.PersistentFlags().IntVarP(&table, "table", "t", 0, "routing table")
 	root.AddCommand(route)
 
-	var (
-		table int
-	)
 	list := &cobra.Command{
 		Use:   "list",
 		Short: "list routes",
 		Args:  cobra.NoArgs,
 		Run:   func(cmd *cobra.Command, args []string) { routeList(table) },
 	}
-	list.Flags().IntVarP(&table, "table", "t", 0, "routing table")
 	route.AddCommand(list)
 
 	var (
