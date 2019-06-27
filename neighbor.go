@@ -220,9 +220,9 @@ func readNeighbors(ctx *Context, family uint8) ([]Neighbor, error) {
 	m := netlink.Message{
 		Header: netlink.Header{
 			Type: unix.RTM_GETNEIGH,
-			Flags: netlink.HeaderFlagsRequest |
-				netlink.HeaderFlagsAtomic |
-				netlink.HeaderFlagsRoot,
+			Flags: netlink.Request |
+				netlink.Atomic |
+				netlink.Root,
 		},
 		Data: data,
 	}
@@ -283,9 +283,9 @@ func modifyNeighbors(ctx *Context, ns []Neighbor, op uint16) error {
 	// prepare netlink messages
 	var messages []netlink.Message
 
-	flags := netlink.HeaderFlagsRequest | netlink.HeaderFlagsAcknowledge
+	flags := netlink.Request | netlink.Acknowledge
 	if op == unix.RTM_NEWNEIGH {
-		flags |= netlink.HeaderFlagsCreate | netlink.HeaderFlagsAppend
+		flags |= netlink.Create | netlink.Append
 	}
 
 	for _, n := range ns {
@@ -299,7 +299,7 @@ func modifyNeighbors(ctx *Context, ns []Neighbor, op uint16) error {
 
 		case unix.RTM_NEWNEIGH:
 			log.WithFields(fields).Info("adding neighbor")
-			flags |= netlink.HeaderFlagsCreate | netlink.HeaderFlagsAppend
+			flags |= netlink.Create | netlink.Append
 
 		case unix.RTM_DELNEIGH:
 			log.WithFields(fields).Info("removing neighbor")

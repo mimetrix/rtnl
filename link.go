@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"strings"
 
 	"github.com/mdlayher/netlink"
 	"github.com/mdlayher/netlink/nlenc"
@@ -31,6 +32,7 @@ const (
 	TunType
 	VrfType
 	MacvlanType
+	WireguardType
 )
 
 // interface link address attribute types
@@ -103,6 +105,9 @@ type LinkInfo struct {
 
 	// macvlan properties
 	Macvlan *Macvlan
+
+	// wireguard properties
+	Wireguard *Wireguard
 }
 
 // Methods ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -338,9 +343,9 @@ func (l *Link) SetMtu(ctx *Context, mtu int) error {
 
 	data := append(msg, attrs...)
 
-	flags := netlink.HeaderFlagsRequest |
-		netlink.HeaderFlagsAcknowledge |
-		netlink.HeaderFlagsExcl
+	flags := netlink.Request |
+		netlink.Acknowledge |
+		netlink.Excl
 
 	m := netlink.Message{
 		Header: netlink.Header{
@@ -381,9 +386,9 @@ func (l *Link) SetMaster(ctx *Context, index int) error {
 
 	data := append(msg, attrs...)
 
-	flags := netlink.HeaderFlagsRequest |
-		netlink.HeaderFlagsAcknowledge |
-		netlink.HeaderFlagsExcl
+	flags := netlink.Request |
+		netlink.Acknowledge |
+		netlink.Excl
 
 	m := netlink.Message{
 		Header: netlink.Header{
@@ -407,7 +412,7 @@ func ReadLinks(ctx *Context, spec *Link) ([]*Link, error) {
 	m := netlink.Message{
 		Header: netlink.Header{
 			Type:  unix.RTM_GETLINK,
-			Flags: netlink.HeaderFlagsRequest,
+			Flags: netlink.Request,
 		},
 	}
 
@@ -416,13 +421,13 @@ func ReadLinks(ctx *Context, spec *Link) ([]*Link, error) {
 	}
 
 	if spec.Msg.Family == unix.AF_BRIDGE {
-		m.Header.Flags |= netlink.HeaderFlagsDump
+		m.Header.Flags |= netlink.Dump
 	} else {
-		m.Header.Flags |= netlink.HeaderFlagsAtomic
+		m.Header.Flags |= netlink.Atomic
 	}
 
 	if spec.Msg.Index == 0 {
-		m.Header.Flags |= netlink.HeaderFlagsRoot
+		m.Header.Flags |= netlink.Root
 	}
 
 	data, err := spec.Marshal(ctx)
@@ -557,6 +562,10 @@ func (l *Link) ApplyType(typ string) Attributes {
 		l.Info.Macvlan = &Macvlan{}
 		return l.Info.Macvlan
 
+	case "wireguard":
+		l.Info.Wireguard = &Wireguard{}
+		return l.Info.Wireguard
+
 	}
 
 	log.Tracef("unknown type %s", typ)
@@ -591,6 +600,9 @@ func (li *LinkInfo) Type() LinkType {
 	if li.Macvlan != nil {
 		return MacvlanType
 	}
+	if li.Wireguard != nil {
+		return WireguardType
+	}
 
 	//TODO Is this a reasonable default? Given the logic of how types are
 	//ascertained i think its at least decent.
@@ -623,6 +635,10 @@ func (l *Link) Attributes() []Attributes {
 		result = append(result, l.Info.Macvlan)
 	}
 
+	if l.Info != nil && l.Info.Wireguard != nil {
+		result = append(result, l.Info.Wireguard)
+	}
+
 	return result
 
 }
@@ -648,7 +664,7 @@ func (l *Link) Present(ctx *Context) error {
 	err := l.Add(ctx)
 
 	if err != nil {
-		if err.Error() != "file exists" {
+		if !strings.Contains(err.Error(), "file exists") {
 			return err
 		}
 		// link already exits, so get it's info
@@ -677,7 +693,7 @@ func (l *Link) Del(ctx *Context) error {
 func (l *Link) Absent(ctx *Context) error {
 
 	err := l.Del(ctx)
-	if err != nil && err.Error() != "no such device" {
+	if err != nil && !strings.Contains(err.Error(), "no such device") {
 		return err
 	}
 	return nil
@@ -747,12 +763,12 @@ func (l *Link) Modify(ctx *Context, op uint16) error {
 
 	// netlink wrapper
 
-	flags := netlink.HeaderFlagsRequest |
-		netlink.HeaderFlagsAcknowledge |
-		netlink.HeaderFlagsExcl
+	flags := netlink.Request |
+		netlink.Acknowledge |
+		netlink.Excl
 
 	if op == unix.RTM_NEWLINK {
-		flags |= netlink.HeaderFlagsCreate
+		flags |= netlink.Create
 	}
 
 	m := netlink.Message{
@@ -878,9 +894,9 @@ func (l *Link) SetVlan(ctx *Context, vid uint16, unset, untagged, pvid, self boo
 
 	data := append(msg, attrs...)
 
-	flags := netlink.HeaderFlagsRequest |
-		netlink.HeaderFlagsAcknowledge |
-		netlink.HeaderFlagsExcl
+	flags := netlink.Request |
+		netlink.Acknowledge |
+		netlink.Excl
 
 	op := unix.RTM_SETLINK
 	if unset {
@@ -950,6 +966,8 @@ func (lt LinkType) String() string {
 		return "vrf"
 	case MacvlanType:
 		return "macvlan"
+	case WireguardType:
+		return "wireguard"
 	default:
 		return "unspec"
 	}
@@ -977,6 +995,8 @@ func ParseLinkType(str string) LinkType {
 		return VrfType
 	case "macvlan":
 		return MacvlanType
+	case "wireguard":
+		return WireguardType
 	default:
 		return UnspecLinkType
 	}

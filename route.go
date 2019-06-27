@@ -149,7 +149,7 @@ func ReadRoutes(ctx *Context, spec *Route) ([]*Route, error) {
 	m := netlink.Message{
 		Header: netlink.Header{
 			Type:  unix.RTM_GETROUTE,
-			Flags: netlink.HeaderFlagsRequest | netlink.HeaderFlagsRoot,
+			Flags: netlink.Request | netlink.Root,
 		},
 	}
 
@@ -244,12 +244,12 @@ func (r *Route) Modify(ctx *Context, op uint16) error {
 		return err
 	}
 
-	flags := netlink.HeaderFlagsRequest |
-		netlink.HeaderFlagsAcknowledge |
-		netlink.HeaderFlagsExcl
+	flags := netlink.Request |
+		netlink.Acknowledge |
+		netlink.Excl
 
 	if op == unix.RTM_NEWROUTE {
-		flags |= netlink.HeaderFlagsCreate | netlink.HeaderFlagsAppend
+		flags |= netlink.Create | netlink.Append
 	}
 
 	m := netlink.Message{

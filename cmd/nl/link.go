@@ -135,6 +135,17 @@ func linkCommands(root *cobra.Command) {
 	addVeth.Flags().StringVarP(&vebr, "bridge", "b", "", "add veth to bridge")
 	add.AddCommand(addVeth)
 
+	// addWireguard
+	addWireguard := &cobra.Command{
+		Use:   "wg <name>",
+		Short: "create wireguard interface",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			doAddWg(args[0])
+		},
+	}
+	add.AddCommand(addWireguard)
+
 	// set
 	set := &cobra.Command{
 		Use:   "set",
@@ -403,6 +414,27 @@ func doAddVeth(a, b, namespace, bridge string) {
 			log.Fatal(err)
 		}
 		lnk.Info.Master = uint32(b.Msg.Index)
+	}
+
+	err = lnk.Add(ctx)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+}
+
+func doAddWg(name string) {
+
+	ctx, err := rtnl.OpenDefaultContext()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	lnk := &rtnl.Link{
+		Info: &rtnl.LinkInfo{
+			Name:      name,
+			Wireguard: &rtnl.Wireguard{},
+		},
 	}
 
 	err = lnk.Add(ctx)

@@ -203,7 +203,7 @@ func ReadRules(ctx *Context, spec *Rule) ([]*Rule, error) {
 	m := netlink.Message{
 		Header: netlink.Header{
 			Type:  unix.RTM_GETRULE,
-			Flags: netlink.HeaderFlagsRequest | netlink.HeaderFlagsRoot,
+			Flags: netlink.Request | netlink.Root,
 		},
 	}
 
@@ -291,12 +291,12 @@ func (r *Rule) Modify(ctx *Context, op uint16) error {
 		return err
 	}
 
-	flags := netlink.HeaderFlagsRequest |
-		netlink.HeaderFlagsAcknowledge |
-		netlink.HeaderFlagsExcl
+	flags := netlink.Request |
+		netlink.Acknowledge |
+		netlink.Excl
 
 	if op == unix.RTM_NEWRULE {
-		flags |= netlink.HeaderFlagsCreate
+		flags |= netlink.Create
 	}
 
 	m := netlink.Message{

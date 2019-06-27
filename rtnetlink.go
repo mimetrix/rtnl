@@ -117,7 +117,7 @@ func netlinkUpdate(ctx *Context, messages []netlink.Message) error {
 
 			for _, r := range resp {
 
-				if r.Header.Type == netlink.HeaderTypeError {
+				if r.Header.Type == netlink.Error {
 
 					code := binary.LittleEndian.Uint32(r.Data[0:4])
 
