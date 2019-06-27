@@ -180,9 +180,9 @@ func ReadAddrs(ctx *Context, spec *Address) ([]*Address, error) {
 	m := netlink.Message{
 		Header: netlink.Header{
 			Type: unix.RTM_GETADDR,
-			Flags: netlink.HeaderFlagsRequest |
-				netlink.HeaderFlagsAtomic |
-				netlink.HeaderFlagsRoot,
+			Flags: netlink.Request |
+				netlink.Atomic |
+				netlink.Root,
 		},
 	}
 
@@ -251,10 +251,10 @@ func AddAddrs(ctx *Context, addrs []*Address) error {
 		m := netlink.Message{
 			Header: netlink.Header{
 				Type: unix.RTM_NEWADDR,
-				Flags: netlink.HeaderFlagsRequest |
-					netlink.HeaderFlagsAcknowledge |
-					netlink.HeaderFlagsCreate |
-					netlink.HeaderFlagsAppend,
+				Flags: netlink.Request |
+					netlink.Acknowledge |
+					netlink.Create |
+					netlink.Append,
 			},
 			Data: data,
 		}

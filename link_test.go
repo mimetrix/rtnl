@@ -331,3 +331,38 @@ func Test_Vxlan(t *testing.T) {
 	}
 
 }
+
+func Test_Wg(t *testing.T) {
+
+	ctx, err := OpenDefaultContext()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// create wg link
+
+	lnk := &Link{
+		Info: &LinkInfo{
+			Name:      "wgtest",
+			Wireguard: &Wireguard{},
+		},
+	}
+
+	err = lnk.Add(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lnk.Absent(ctx)
+
+	// fetch wg link
+
+	wl, err := GetLink(ctx, "wgtest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if wl.Info.Wireguard == nil {
+		t.Error("exepcted wireguard link")
+	}
+
+}
