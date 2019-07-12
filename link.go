@@ -654,7 +654,11 @@ func (l *Link) Add(ctx *Context) error {
 	}
 
 	// read kernel info about the link
-	return l.Read(ctx)
+	if ctx.Target != nil {
+		return l.Read(ctx.Target)
+	} else {
+		return l.Read(ctx)
+	}
 
 }
 
@@ -667,8 +671,11 @@ func (l *Link) Present(ctx *Context) error {
 		if !strings.Contains(err.Error(), "file exists") {
 			return err
 		}
-		// link already exits, so get it's info
-		return l.Read(ctx)
+		if ctx.Target != nil {
+			return l.Read(ctx.Target)
+		} else {
+			return l.Read(ctx)
+		}
 	}
 
 	return nil
