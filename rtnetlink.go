@@ -14,7 +14,8 @@ import (
 var Version = "undefined"
 
 type Context struct {
-	f *os.File
+	f      *os.File
+	Target *Context
 }
 
 func (c *Context) Fd() int {
@@ -24,10 +25,17 @@ func (c *Context) Fd() int {
 	return int(c.f.Fd())
 }
 func (c *Context) Close() error {
-	if c == nil || c.f == nil {
+	if c == nil {
 		return nil
 	}
-	return c.f.Close()
+	if c.Target != nil {
+		c.Target.Close()
+	}
+	if c.f != nil {
+		return c.f.Close()
+	}
+
+	return nil
 }
 
 // OpenContext creates a context in the specified namespace
@@ -37,7 +45,7 @@ func OpenContext(namespace string) (*Context, error) {
 	if err != nil {
 		return nil, err
 	}
-	ctx := &Context{f}
+	ctx := &Context{f: f}
 
 	return ctx, nil
 
@@ -50,7 +58,7 @@ func OpenDefaultContext() (*Context, error) {
 	if err != nil {
 		return nil, err
 	}
-	ctx := &Context{f}
+	ctx := &Context{f: f}
 
 	return ctx, nil
 }
