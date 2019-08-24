@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"strings"
 
 	"golang.org/x/sys/unix"
 
@@ -258,7 +259,7 @@ func (r *Rule) Present(ctx *Context) error {
 
 	err := r.Add(ctx)
 
-	if err != nil && err.Error() != "file exists" {
+	if err != nil && !strings.Contains(err.Error(), "file exists") {
 		return err
 	}
 
@@ -276,7 +277,7 @@ func (r *Rule) Absent(ctx *Context) error {
 
 	err := r.Del(ctx)
 
-	if err != nil && err.Error() != "no such file or directory" {
+	if err != nil && strings.Contains(err.Error(), "no such file") {
 		return err
 	}
 

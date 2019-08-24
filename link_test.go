@@ -9,8 +9,6 @@ import (
 	"testing"
 )
 
-var ctx = &Context{}
-
 type IProute2Link struct {
 	Link   string
 	Ifname string
@@ -18,27 +16,55 @@ type IProute2Link struct {
 
 func Test_AddVeth(t *testing.T) {
 
+	ctx, err := OpenDefaultContext()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ctx.Close()
+
+	out, err := exec.Command("ip", "netns", "add", "donkey").CombinedOutput()
+	if err != nil {
+		t.Log(string(out))
+		t.Fatal(err)
+	}
+	defer func() {
+		out, err = exec.Command("ip", "netns", "del", "donkey").CombinedOutput()
+		if err != nil {
+			t.Log(string(out))
+			t.Fatal(err)
+		}
+	}()
+
+	tctx, err := OpenContext("donkey")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tctx.Close()
+
+	ctx.Target = tctx
+
 	// add a veth link
 	ve := &Link{
 		Info: &LinkInfo{
-			Name: "vethA",
+			Name: "vethB",
+			Ns:   uint32(tctx.Fd()),
 			Veth: &Veth{
-				Peer: "vethB",
+				Peer: "vethA",
 			},
 		},
 	}
-	err := ve.Add(ctx)
+	err = ve.Add(ctx)
 	t.Logf("%+v", ve.Info)
 	if err != nil {
 		t.Fatal(err)
 	}
 	ve.Info.Veth.ResolvePeer(ctx)
-	if ve.Info.Veth.Peer != "vethB" {
+	if ve.Info.Veth.Peer != "vethA" {
 		t.Fatal("peer lost")
 	}
 
 	// ensure iproute2 sees it and parameters are correct
-	out, err := exec.Command(
+	out, err = exec.Command(
 		"ip", "-j", "link", "show", "dev", "vethA",
 	).CombinedOutput()
 	if err != nil {
@@ -59,26 +85,34 @@ func Test_AddVeth(t *testing.T) {
 		t.Fatal("veth does not have correct name")
 	}
 
-	if ilinks[0].Link != "vethB" {
-		t.Fatal("veth peer does not have correct name")
-	}
+	/*
+		if ilinks[0].Link != "vethA" {
+			t.Log(ilinks[0].Link)
+			t.Fatal("veth peer does not have correct name")
+		}
+	*/
 
 	// read back and ensure peer equality
 
 	lnk, err := GetLink(ctx, "vethA")
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Logf("%+v", lnk.Info)
-	lnk.Info.Veth.ResolvePeer(ctx)
-	if ve.Info.Veth.Peer != lnk.Info.Veth.Peer {
+	lnk.Info.Veth.ResolvePeer(tctx)
+	if ve.Info.Name != lnk.Info.Veth.Peer {
 		t.Fatalf("peer of read link not correct %v != %v",
 			ve.Info.Veth.Peer, lnk.Info.Veth.Peer,
 		)
 	}
-	if ve.Info.Address.String() != lnk.Info.Address.String() {
-		t.Fatalf("L2 address mismatch %s != %s",
-			ve.Info.Address.String(),
-			lnk.Info.Address.String(),
-		)
-	}
+	/*
+		if ve.Info.Address.String() != lnk.Info.Address.String() {
+			t.Fatalf("L2 address mismatch %s != %s",
+				ve.Info.Address.String(),
+				lnk.Info.Address.String(),
+			)
+		}
+	*/
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,12 +122,12 @@ func Test_AddVeth(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = ve.Del(ctx)
+	err = ve.Del(tctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = ve.Absent(ctx)
+	err = ve.Absent(tctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,6 +135,12 @@ func Test_AddVeth(t *testing.T) {
 }
 
 func Test_VethNamespace(t *testing.T) {
+
+	ctx, err := OpenDefaultContext()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ctx.Close()
 
 	va := &Link{
 		Info: &LinkInfo{
@@ -110,7 +150,7 @@ func Test_VethNamespace(t *testing.T) {
 			},
 		},
 	}
-	err := va.Add(ctx)
+	err = va.Add(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,6 +215,12 @@ func Test_VethNamespace(t *testing.T) {
 
 func Test_VethAddress(t *testing.T) {
 
+	ctx, err := OpenDefaultContext()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ctx.Close()
+
 	va := &Link{
 		Info: &LinkInfo{
 			Name: "vethA",
@@ -183,7 +229,7 @@ func Test_VethAddress(t *testing.T) {
 			},
 		},
 	}
-	err := va.Add(ctx)
+	err = va.Add(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,13 +268,19 @@ func Test_VethAddress(t *testing.T) {
 
 func Test_Bridge(t *testing.T) {
 
+	ctx, err := OpenDefaultContext()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ctx.Close()
+
 	br := &Link{
 		Info: &LinkInfo{
 			Name:   "br47",
 			Bridge: &Bridge{},
 		},
 	}
-	err := br.Present(ctx)
+	err = br.Present(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -288,6 +340,12 @@ func Test_Bridge(t *testing.T) {
 
 func Test_Vxlan(t *testing.T) {
 
+	ctx, err := OpenDefaultContext()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ctx.Close()
+
 	lo, err := GetLink(ctx, "lo")
 	if err != nil {
 		t.Fatal(err)
@@ -335,6 +393,12 @@ func Test_Vxlan(t *testing.T) {
 func Test_Wg(t *testing.T) {
 
 	ctx, err := OpenDefaultContext()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ctx.Close()
+
+	ctx, err = OpenDefaultContext()
 	if err != nil {
 		t.Fatal(err)
 	}
