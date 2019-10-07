@@ -1,12 +1,9 @@
-
 stages:
-  - test
+  - build
 
-test:
-  stage: test
+build:
+  stage: build
   script:
-    - unset GOPATH
-    - make clean
     - make
   artifacts:
     paths:
@@ -14,3 +11,4 @@ test:
   tags:
     - merge
     - shell
+    - go:1.12
