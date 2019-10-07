@@ -1034,3 +1034,13 @@ func IfInfomsgBytes(msg unix.IfInfomsg) []byte {
 	}
 
 }
+
+func (l *Link) Addrs(ctx *Context) ([]*Address, error) {
+
+	return ReadAddrs(ctx, &Address{
+		Msg: unix.IfAddrmsg{
+			Index: uint32(l.Msg.Index),
+		},
+	})
+
+}
