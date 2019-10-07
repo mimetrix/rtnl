@@ -10,5 +10,5 @@ build:
       - build/*
   tags:
     - merge
-    - shell
+    - docker
     - go:1.12
